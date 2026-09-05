@@ -111,11 +111,18 @@ export async function generateAndPublish(options: GenerateOptions) {
   })
 
   try {
-    // 3. Generate gambar (Gratis via Pollinations AI)
-    console.log(`[GENERATOR] Mengambil gambar gratis untuk: ${article.title}`)
-    const imageUrl = await generateImage(articleData.imagePrompt, setting.imageStyle)
+    // 3. Generate gambar (Opsional: dinonaktifkan jika imageStyle = 'none' atau 'tanpa gambar')
+    const isImageDisabled = !setting.imageStyle || 
+      ['none', 'tanpa gambar', 'no image', 'disable', 'disabled', 'off'].includes(setting.imageStyle.trim().toLowerCase())
 
-    await prisma.article.update({ where: { id: article.id }, data: { imageUrl } })
+    let imageUrl: string | null = null
+    if (!isImageDisabled) {
+      console.log(`[GENERATOR] Mengambil gambar gratis untuk: ${article.title}`)
+      imageUrl = await generateImage(articleData.imagePrompt, setting.imageStyle)
+      await prisma.article.update({ where: { id: article.id }, data: { imageUrl } })
+    } else {
+      console.log(`[GENERATOR] Pembuatan gambar dinonaktifkan (tanpa gambar) untuk: ${tenant.name}`)
+    }
 
     // 4. Publish ke CMS
     let cmsPostId: string | null = null
