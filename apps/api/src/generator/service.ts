@@ -390,11 +390,28 @@ ATURAN OUTPUT:
   return parseArticleJson(text)
 }
 
+function unescapeJsonString(str: string): string {
+  if (!str) return ''
+  return str
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '')
+    .replace(/\\t/g, ' ')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, '\\')
+}
+
 function parseArticleJson(text: string): any {
+  // Strip any accidental markdown formatting
+  let cleanText = text.trim()
+  if (cleanText.startsWith('```')) {
+    cleanText = cleanText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  }
+
   try {
-    return JSON.parse(text)
+    return JSON.parse(cleanText)
   } catch (err: any) {
-    const match = text.match(/\{[\s\S]*\}/)
+    const match = cleanText.match(/\{[\s\S]*\}/)
     if (match) {
       try {
         return JSON.parse(match[0])
@@ -402,11 +419,11 @@ function parseArticleJson(text: string): any {
     }
 
     // Robust field-by-field extraction if unescaped quotes exist in content
-    const titleMatch = text.match(/"title"\s*:\s*"([^"]+)"/)
-    const excerptMatch = text.match(/"excerpt"\s*:\s*"([^"]+)"/)
-    const imagePromptMatch = text.match(/"imagePrompt"\s*:\s*"([^"]+)"/)
-    const keywordsMatch = text.match(/"suggestedKeywords"\s*:\s*\[([\s\S]*?)\]/)
-    const contentMatch = text.match(/"content"\s*:\s*"([\s\S]*?)"\s*,\s*"excerpt"/)
+    const titleMatch = cleanText.match(/"title"\s*:\s*"([^"]+)"/)
+    const excerptMatch = cleanText.match(/"excerpt"\s*:\s*"([^"]+)"/)
+    const imagePromptMatch = cleanText.match(/"imagePrompt"\s*:\s*"([^"]+)"/)
+    const keywordsMatch = cleanText.match(/"suggestedKeywords"\s*:\s*\[([\s\S]*?)\]/)
+    const contentMatch = cleanText.match(/"content"\s*:\s*"([\s\S]*?)"\s*,\s*"excerpt"/)
 
     if (titleMatch && contentMatch) {
       let keywords: string[] = []
@@ -417,11 +434,11 @@ function parseArticleJson(text: string): any {
           .filter(Boolean)
       }
       return {
-        title: titleMatch[1],
-        content: contentMatch[1],
-        excerpt: excerptMatch ? excerptMatch[1] : titleMatch[1],
+        title: unescapeJsonString(titleMatch[1]),
+        content: unescapeJsonString(contentMatch[1]),
+        excerpt: excerptMatch ? unescapeJsonString(excerptMatch[1]) : unescapeJsonString(titleMatch[1]),
         suggestedKeywords: keywords.length > 0 ? keywords : ['service iphone bali'],
-        imagePrompt: imagePromptMatch ? imagePromptMatch[1] : titleMatch[1],
+        imagePrompt: imagePromptMatch ? unescapeJsonString(imagePromptMatch[1]) : unescapeJsonString(titleMatch[1]),
       }
     }
 
@@ -439,8 +456,17 @@ async function generateImage(prompt: string, style: string): Promise<string> {
 }
 
 function formatContentForCms(html: string): string {
+  // 0. Clean literal JSON escape sequences (e.g. \n, \", \\') so they never appear on the website
+  let cleaned = html
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '')
+    .replace(/\\t/g, ' ')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, '\\')
+
   // 1. Convert <table> to clean semantic list to prevent CMS HTML parser crashes
-  let cleaned = html.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
+  cleaned = cleaned.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
     const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || []
     if (rows.length <= 1) return ''
     let listHtml = '<ul>'
