@@ -1,0 +1,20 @@
+Options -MultiViews
+RewriteEngine On
+RewriteBase /
+
+# 1. Jika file atau folder fisik ada (termasuk folder _next/static), sajikan langsung!
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# 2. Arahkan endpoint API ke PHP bridge
+RewriteRule ^api/(.*)$ api-bridge.php [QSA,L]
+RewriteRule ^api$ api-bridge.php [QSA,L]
+
+# 3. Hilangkan ekstensi .html untuk URL halaman
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.*)$ $1.html [L]
+
+# 4. Fallback ke index.html (HANYA jika bukan file gambar/css/js)
+RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$ [NC]
+RewriteRule ^ index.html [L]
