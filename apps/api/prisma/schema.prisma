@@ -1,0 +1,242 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["omitApi"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  domain    String   @unique
+  cmsType   CmsType
+  cmsUrl    String
+  cmsApiKey String
+  language  String   @default("id")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  articles      Article[]
+  schedules     Schedule[]
+  reports       Report[]
+  setting       TenantSetting?
+  rankProjects     RankTrackingProject[]
+  siteAudits       SiteAuditReport[]
+  backlinkProfiles BacklinkProfile[]
+  geoBacklinkTasks GeoBacklinkTask[]
+  localListings    LocalListingProfile[]
+  seoDocuments     SeoWritingDocument[]
+  claimedNiches    ClaimedNiche[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(ADMIN)
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Article {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  content     String        @db.Text
+  excerpt     String
+  keywords    String[]
+  imageUrl    String?
+  imagePrompt String?
+  status      ArticleStatus @default(DRAFT)
+  publishedAt DateTime?
+  cmsPostId   String?
+  cmsPostUrl  String?
+  errorLog    String?       @db.Text
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Schedule {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  cronExpr  String
+  topic     String?
+  isActive  Boolean  @default(true)
+  startDate DateTime?
+  endDate   DateTime?
+  lastRun   DateTime?
+  nextRun   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Report {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      ReportType
+  data      Json
+  sentAt    DateTime   @default(now())
+}
+
+model TenantSetting {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  telegramChatId   String?
+  telegramBotToken String?
+  googleServiceAccountJson String? @db.Text
+  geminiApiKey     String   @default("")
+  articlesPerDay   Int      @default(1)
+  imageStyle       String   @default("professional photography, clean background")
+  businessNiche    String?
+  targetKeywords   String[]
+  competitors      String[]
+  customPrompt     String?  @db.Text
+  timezone         String   @default("Asia/Jakarta")
+  enableAutoIndex  Boolean  @default(false)
+  lastCrawlerRun   DateTime?
+  updatedAt        DateTime @updatedAt
+}
+
+enum CmsType {
+  WORDPRESS
+  LARAVEL
+  BLOGGER
+}
+
+enum Role {
+  SUPERUSER
+  ADMIN
+  VIEWER
+}
+
+enum ArticleStatus {
+  PENDING
+  DRAFT
+  PUBLISHED
+  FAILED
+}
+
+enum ReportType {
+  DAILY
+  WEEKLY
+}
+
+model Keyword {
+  id           String   @id @default(cuid())
+  term         String   @unique
+  volume       Int      @default(0)
+  difficulty   Int      @default(0)
+  cpc          Float    @default(0.0)
+  searchIntent String?
+  location     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model RankTrackingProject {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  domain    String
+  location  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  histories RankHistory[]
+}
+
+model RankHistory {
+  id        String              @id @default(cuid())
+  projectId String
+  project   RankTrackingProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keyword   String
+  rank      Int
+  url       String?
+  createdAt DateTime            @default(now())
+}
+
+model SiteAuditReport {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url         String
+  healthScore Int      @default(0)
+  errors      Int      @default(0)
+  warnings    Int      @default(0)
+  notices     Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model BacklinkProfile {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  domain           String
+  domainRating     Int      @default(0)
+  totalBacklinks   Int      @default(0)
+  referringDomains Int      @default(0)
+  createdAt        DateTime @default(now())
+}
+
+model LocalListingProfile {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  businessName String
+  address      String
+  phone        String
+  website      String?
+  category     String?
+  syncStatus   String   @default("PENDING")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SeoWritingDocument {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title            String
+  content          String   @db.Text
+  targetKeywords   String[]
+  seoScore         Int      @default(0)
+  readabilityScore Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model ClaimedNiche {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+}
+
+model GeoBacklinkTask {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  domain       String
+  targetUrl    String
+  domainRating Int      @default(0)
+  category     String
+  strategy     String   @db.Text
+  tutorial     Json     // Array of tutorial steps
+  status       String   @default("PENDING") // PENDING or DONE
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: seogeo_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: seogeo
+      POSTGRES_PASSWORD: seogeo_pass_2024
+      POSTGRES_DB: seogeo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: seogeo_api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://seogeo:seogeo_pass_2024@postgres:5432/seogeo
+    depends_on:
+      - postgres
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
+
+  dashboard:
+    build:
+      context: ./apps/dashboard
+      dockerfile: Dockerfile
+    container_name: seogeo_dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

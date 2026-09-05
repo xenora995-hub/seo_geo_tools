@@ -1,0 +1,16 @@
+{
+  "name": "seo-geo-tools",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/dashboard\"",
+    "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/dashboard",
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "db:seed": "npm run db:seed --workspace=apps/api",
+    "setup": "npm install && npm run db:migrate && npm run db:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
