@@ -19,21 +19,47 @@ export default function TenantsPage() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [fetchError, setFetchError] = useState('')
 
-  const fetchTenants = async () => {
+  const fetchTenants = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const res = await api.get('/api/tenants')
       setTenants(res.data.data || [])
+      setFetchError('')
     } catch (err: any) {
       console.error(err)
+      if (!silent || tenants.length === 0) {
+        setFetchError(err.response?.data?.message || 'Gagal terhubung ke Backend API (502/Down).')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchTenants()
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchTenants(true)
+      }
+    }, 6000)
+
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchTenants(true)
+      }
+    }
+
+    window.addEventListener('focus', handleSync)
+    document.addEventListener('visibilitychange', handleSync)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleSync)
+      document.removeEventListener('visibilitychange', handleSync)
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -92,6 +118,16 @@ export default function TenantsPage() {
         {loading ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
             Memuat daftar website...
+          </div>
+        ) : fetchError ? (
+          <div style={{ padding: '3rem', textAlign: 'center' }}>
+            <p style={{ color: '#f87171', fontWeight: 600, marginBottom: '0.5rem' }}>⚠️ {fetchError}</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+              Backend API pada port 4000 sedang offline atau dalam proses restart.
+            </p>
+            <button onClick={() => fetchTenants(false)} className="btn btn-outline" style={{ display: 'inline-block' }}>
+              🔄 Coba Muat Ulang
+            </button>
           </div>
         ) : tenants.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
