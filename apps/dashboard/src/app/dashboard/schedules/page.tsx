@@ -30,22 +30,43 @@ function SchedulesContent() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const fetchSchedules = async () => {
+  const fetchSchedules = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const query = tenantIdQuery ? `?tenantId=${tenantIdQuery}` : ''
       const res = await api.get(`/api/schedules${query}`)
       setSchedules(res.data.data || [])
     } catch (err) {
       console.error(err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchSchedules()
-  }, [])
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchSchedules(true)
+      }
+    }, 10000)
+
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchSchedules(true)
+      }
+    }
+
+    window.addEventListener('focus', handleSync)
+    document.addEventListener('visibilitychange', handleSync)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleSync)
+      document.removeEventListener('visibilitychange', handleSync)
+    }
+  }, [tenantIdQuery])
 
   const handleTimeChange = (newTime: string) => {
     if (!newTime) return

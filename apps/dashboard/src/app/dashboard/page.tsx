@@ -8,18 +8,45 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
+  const fetchStats = async () => {
+    try {
+      const res = await api.get('/api/articles?limit=1')
+      setStats({
+        total: res.data.pagination?.total || 0,
+      })
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     const u = localStorage.getItem('user')
     if (u) setUser(JSON.parse(u))
 
-    api.get('/api/articles?limit=1')
-      .then(res => {
-        setStats({
-          total: res.data.pagination?.total || 0,
-        })
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    fetchStats()
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchStats()
+      }
+    }, 10000)
+
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchStats()
+      }
+    }
+
+    window.addEventListener('focus', handleSync)
+    document.addEventListener('visibilitychange', handleSync)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleSync)
+      document.removeEventListener('visibilitychange', handleSync)
+    }
   }, [])
 
   const quickActions = [

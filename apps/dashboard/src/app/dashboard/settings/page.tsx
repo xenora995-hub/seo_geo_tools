@@ -267,8 +267,11 @@ function SettingsContent() {
                 <input
                   value={form.imageStyle}
                   onChange={e => setForm({ ...form, imageStyle: e.target.value })}
-                  placeholder="professional photography, clean background"
+                  placeholder="professional photography, clean background (atau 'none')"
                 />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                  Ketik <strong>none</strong> atau <strong>tanpa gambar</strong> jika ingin mempublikasikan artikel murni teks tanpa gambar banner.
+                </span>
               </div>
             </div>
           </div>

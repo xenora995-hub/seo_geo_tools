@@ -1,36 +1,81 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import api from '@/lib/api'
 
 export default function ArticlesPage() {
   const [articles, setArticles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [isSyncing, setIsSyncing] = useState(false)
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [selectedArticle, setSelectedArticle] = useState<any>(null)
+  const isMountedRef = useRef(true)
+  const selectedArticleRef = useRef<any>(null)
+  selectedArticleRef.current = selectedArticle
+
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
 
-  const fetchArticles = async () => {
+  const fetchArticles = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) {
+        setLoading(true)
+      } else {
+        setIsSyncing(true)
+      }
       const params = new URLSearchParams()
       params.append('page', String(page))
       params.append('limit', '10')
       if (statusFilter !== 'ALL') params.append('status', statusFilter)
 
       const res = await api.get(`/api/articles?${params.toString()}`)
-      setArticles(res.data.data || [])
+      if (!isMountedRef.current) return
+
+      const newArticles = res.data.data || []
+      setArticles(newArticles)
       setTotalPages(res.data.pagination?.pages || 1)
+
+      // Automatically keep modal updated if user has an article open
+      if (selectedArticleRef.current) {
+        const found = newArticles.find((a: any) => a.id === selectedArticleRef.current.id)
+        if (found) setSelectedArticle(found)
+      }
     } catch (err) {
-      console.error(err)
+      console.error('Auto-sync articles error:', err)
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) {
+        if (!silent) setLoading(false)
+        setIsSyncing(false)
+      }
     }
   }
 
   useEffect(() => {
+    isMountedRef.current = true
     fetchArticles()
+
+    // Background auto-refresh every 5 seconds so newly generated articles appear in real-time
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchArticles(true)
+      }
+    }, 5000)
+
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchArticles(true)
+      }
+    }
+
+    window.addEventListener('focus', handleSync)
+    document.addEventListener('visibilitychange', handleSync)
+
+    return () => {
+      isMountedRef.current = false
+      clearInterval(interval)
+      window.removeEventListener('focus', handleSync)
+      document.removeEventListener('visibilitychange', handleSync)
+    }
   }, [statusFilter, page])
 
   const [publishingId, setPublishingId] = useState<string | null>(null)
@@ -75,16 +120,51 @@ export default function ArticlesPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700 }}>📝 Daftar Artikel</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 700 }}>📝 Daftar Artikel</h1>
+            <span style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '0.4rem', 
+              fontSize: '0.75rem', 
+              fontWeight: 500,
+              color: '#34d399', 
+              background: 'rgba(16, 185, 129, 0.12)', 
+              border: '1px solid rgba(16, 185, 129, 0.3)', 
+              padding: '0.25rem 0.65rem', 
+              borderRadius: 999 
+            }}>
+              <span style={{ 
+                width: 7, 
+                height: 7, 
+                borderRadius: '50%', 
+                backgroundColor: isSyncing ? '#38bdf8' : '#10b981', 
+                boxShadow: isSyncing ? '0 0 8px #38bdf8' : '0 0 6px #10b981',
+                display: 'inline-block',
+                transition: 'all 0.3s ease'
+              }} />
+              {isSyncing ? 'Menyinkronkan...' : 'Auto-Sync Aktif'}
+            </span>
+          </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Semua konten SEO & GEO yang telah diproduksi dan dipublikasi ke CMS
+            Daftar konten diperbarui secara otomatis setiap beberapa detik tanpa perlu refresh halaman manual.
           </p>
         </div>
-        <a href="/dashboard/generate" className="btn btn-primary">
-          ✨ Buat Artikel Baru
-        </a>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button 
+            onClick={() => fetchArticles(false)} 
+            className="btn btn-outline" 
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 0.95rem' }}
+            title="Segarkan artikel sekarang"
+          >
+            🔄 Segarkan
+          </button>
+          <a href="/dashboard/generate" className="btn btn-primary">
+            ✨ Buat Artikel Baru
+          </a>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
