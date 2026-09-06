@@ -17,6 +17,22 @@ function SchedulesContent() {
   const [backdateTarget, setBackdateTarget] = useState<any>(null)
   const [backdateForm, setBackdateForm] = useState({ date: '' })
   const [runningBackdate, setRunningBackdate] = useState(false)
+  const [runningTriggerId, setRunningTriggerId] = useState<string | null>(null)
+
+  const handleTriggerNow = async (s: any) => {
+    if (!confirm(`Jalankan jadwal "${s.name}" sekarang? Artikel baru akan langsung di-generate oleh AI dan diposting ke CMS.`)) return
+    setRunningTriggerId(s.id)
+    try {
+      const query = tenantIdQuery ? `?tenantId=${tenantIdQuery}` : ''
+      const res = await api.post(`/api/schedules/trigger/${s.id}${query}`, {})
+      alert(res.data.message || 'Artikel berhasil dibuat dan diposting!')
+      fetchSchedules()
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Gagal menjalankan jadwal')
+    } finally {
+      setRunningTriggerId(null)
+    }
+  }
 
   const [form, setForm] = useState({
     name: '',
@@ -261,6 +277,15 @@ function SchedulesContent() {
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                      <button
+                        onClick={() => handleTriggerNow(s)}
+                        disabled={runningTriggerId === s.id}
+                        className="btn"
+                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', whiteSpace: 'nowrap', backgroundColor: '#eab308', color: '#000', border: 'none', fontWeight: 600 }}
+                        title="Jalankan jadwal ini sekarang juga"
+                      >
+                        {runningTriggerId === s.id ? '⏳ Memproses...' : '⚡ Jalankan'}
+                      </button>
                       <button
                         onClick={() => handleEdit(s)}
                         className="btn btn-outline"
