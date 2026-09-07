@@ -1,69 +1,66 @@
 # 🛠️ Panduan Menjaga Backend & Scheduler Tetap Hidup di Hostinger
 
-Panduan ini untuk memastikan backend Express API dan penjadwalan otomatis (**Scheduler Jam 8 Pagi**) tidak pernah mati di hosting Hostinger (hPanel / Shared / Cloud).
+Panduan ini untuk memastikan backend Express API dan penjadwalan otomatis (**Scheduler Jam 8 Pagi**) selalu berjalan tepat waktu dan tanggal artikel **100% otomatis mengikuti tanggal hari ini** di hosting Hostinger.
 
 ---
 
-## 1. Penyebab Masalah Tadi Pagi
+## 1. Penjelasan Mengapa Tanggalnya Tetap Tanggal 6 Kemarin
 
-1. **Service Backend Node.js Mati (502 Bad Gateway)**:
-   - Pada shared hosting Hostinger, proses background `pm2` atau `node` sering dimatikan oleh sistem saat terminal SSH ditutup atau saat server idle / reboot otomatis.
-   - Karena `node-cron` berjalan di dalam memori proses Node.js, saat proses Node.js mati, jadwal otomatis tidak dapat dieksekusi.
-2. **Kendala Pengecekan Tanggal Mulai (startDate)**:
-   - Tanggal mulai jadwal tersimpan dalam UTC (`2026-09-06T00:00:00.000Z`) yang bertepatan tepat dengan jam 08:00:00 WITA. Sedikit selisih milidetik waktu server menyebabkan pengecekan `now < schedule.startDate` menganggap jadwal belum saatnya jalan. *(Ini sudah diperbaiki ke perbandingan kalender zona waktu `YYYY-MM-DD`)*.
+1. **Artikel yang Tampil di Website Masih Artikel Uji Coba Kemarin (6 September)**:
+   - Tadi pagi service backend Node.js (`seogeo-api`) di Hostinger sempat tertidur/mati (502 Bad Gateway), sehingga robot belum sempat melakukan generate otomatis untuk tanggal 7. Artikel teratas yang terlihat adalah artikel kemarin sore yang waktu publish-nya di-format ke `08:00:00`.
+2. **Penyelarasan Zona Waktu Kalender (Asia/Makassar / WITA)**:
+   - Server Hostinger menggunakan waktu UTC/Eropa. Di kode sebelumnya, pengambilan tanggal artikel menggunakan waktu bawaan server, sehingga jika ada selisih jam maka tanggalnya bisa tertinggal 1 hari dari kalender lokal Bali.
+   - **Kini sudah diperbaiki total:** Tanggal artikel, tanggal publish CMS Laravel, dan Schema JSON-LD sekarang dikunci secara absolut menggunakan zona waktu tenant (`Asia/Makassar` / WITA). Hari ini akan selalu tercatat tanggal 7, besok tanggal 8, lusa tanggal 9, dan seterusnya secara otomatis!
 
 ---
 
-## 2. Langkah Solusi & Restart di Server Hostinger
+## 2. Langkah Update di Server Hostinger (SSH)
 
 Buka terminal SSH Hostinger Anda, lalu jalankan perintah berikut:
 
-### Langkah A: Update Kode Terbaru dari Git
 ```bash
 cd ~/seo-geo-tools
 git pull origin main
 cd apps/api
 npm run build
-```
-
-### Langkah B: Jalankan & Kunci PM2
-```bash
-# Jalankan service API
-pm2 start dist/index.js --name seogeo-api
-
-# Simpan state PM2 agar tercatat
+pm2 restart seogeo-api || pm2 start dist/index.js --name seogeo-api
 pm2 save
 ```
 
+Beri izin eksekusi script keep-alive:
+```bash
+chmod +x ~/seo-geo-tools/keep-alive.sh
+```
+
 ---
 
-## 3. Pasang Keep-Alive & External Cron di hPanel Hostinger (PENTING!)
+## 3. Pengaturan Cron di hPanel Hostinger (2 Cron Saja)
 
-Agar proses Node.js **tidak pernah mati lagi** dan jika sempat mati otomatis dihidupkan kembali, pasang cron job di Hostinger:
+Buka **hPanel Hostinger** -> Masuk menu **Advanced (Tingkat Lanjut)** -> **Cron Jobs** -> Pilih **Custom**:
 
-1. Buka **hPanel Hostinger** -> Masuk ke menu **Advanced** -> **Cron Jobs**.
-2. Pilih jenis: **Custom**.
-
-### Cron 1: Penjaga Hidup PM2 (Setiap 5 Menit)
-- **Command**:
+### Cron 1: Penjaga Hidup Otomatis (Setiap 5 Menit)
+Memastikan backend API tidak pernah mati. Jika mati, script ini akan langsung menghidupkannya kembali dalam hitungan detik.
+- **Perintah (Command)**:
   ```bash
-  pgrep -f "seogeo-api" > /dev/null || (cd ~/seo-geo-tools/apps/api && npx pm2 resurrect || pm2 start dist/index.js --name seogeo-api)
+  bash ~/seo-geo-tools/keep-alive.sh > /dev/null 2>&1
   ```
-- **Interval**: Pilih `Every 5 minutes` (`*/5 * * * *`).
+- **Waktu**: Pilih `Setiap 5 menit` (`*/5 * * * *`).
 
-### Cron 2: Safety Net Runner Jam 8 Pagi (Cadangan Eksekusi Otomatis)
-Jika Anda ingin kepastian 100% tanpa takut Node.js tertidur, gunakan endpoint runner baru yang sudah kita buat:
-- **Command**:
+### Cron 2: Pemicu Eksekusi Jam 8 Pagi (Safety Net)
+Cadangan pemicu otomatis setiap jam 08:00 pagi:
+- **Perintah (Command)**:
   ```bash
   curl -s "https://seo.baliphonerepair.com/api/schedules/runner?secret=seogeo-cron-token-secret" > /dev/null 2>&1
   ```
-- **Interval**: Setiap hari jam 08:00 pagi (`0 8 * * *`).
+- **Waktu**: Setiap hari jam 08:00 pagi (`0 8 * * *`).
+  - Menit: `0`
+  - Jam: `8`
+  - Hari, Bulan, Hari Kerja: `*`
 
 ---
 
-## 4. Cara Menjalankan Artikel yang Tertinggal Tadi Pagi
+## 4. Cara Menjalankan Artikel Tanggal Hari Ini (Jika Ingin Diterbitkan Sekarang)
 
-Untuk langsung membuat artikel yang tadi pagi terlewat:
 1. Buka dashboard: `https://seo.baliphonerepair.com/dashboard/schedules`
-2. Klik tombol **Trigger (ikon petir / jalankan)** di samping jadwal Anda.
-3. Artikel akan langsung di-generate oleh AI dan di-publish ke CMS website Anda serta dikirim ke Telegram!
+2. Klik tombol **⚡ Jalankan** pada jadwal website Anda.
+3. Robot AI akan langsung menulis artikel dengan tanggal hari ini (`2026-09-07 08:00:00`) dan otomatis tayang di website serta notifikasi dikirim ke Telegram!

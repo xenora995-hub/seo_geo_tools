@@ -85,13 +85,15 @@ export async function generateAndPublish(options: GenerateOptions) {
   const articleData = await generateArticle(genAI, topicToWrite, targetKeywords, tenant.language, setting.customPrompt)
 
   // Injeksi Schema JSON-LD (Article di awal & FAQ di akhir)
+  const timezone = setting.timezone || 'Asia/Makassar'
   const actualPublishDate = publishDate ? new Date(publishDate) : new Date()
   const articleSchema = generateArticleSchema(
     articleData.title,
     articleData.excerpt,
     articleData.suggestedKeywords,
     actualPublishDate,
-    tenant.name
+    tenant.name,
+    timezone
   )
   const faqSchema = generateFaqSchema(articleData.content)
   const cleanedContent = formatContentForCms(articleData.content)
@@ -139,7 +141,8 @@ export async function generateAndPublish(options: GenerateOptions) {
           tenant,
           article: { ...article, content: finalContent, imageUrl },
           imageUrl,
-          publishDate: actualPublishDate
+          publishDate: actualPublishDate,
+          timezone
         })
         cmsPostId = result.id
         cmsPostUrl = result.url
@@ -195,15 +198,30 @@ export async function generateAndPublish(options: GenerateOptions) {
   }
 }
 
-function generateArticleSchema(title: string, excerpt: string, keywords: string[], publishDate: Date, tenantName: string): string {
+function generateArticleSchema(title: string, excerpt: string, keywords: string[], publishDate: Date, tenantName: string, timezone: string = 'Asia/Makassar'): string {
+  let dateStr = ''
+  try {
+    dateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(publishDate)
+  } catch {
+    dateStr = publishDate.toISOString().split('T')[0]
+  }
+
+  const tzOffset = timezone.includes('Jakarta') ? '+07:00' : '+08:00'
+  const isoDate = `${dateStr}T08:00:00${tzOffset}`
+
   const schema = {
     "@context": "https://schema.org",
     "@type": "Article",
     "headline": title,
     "description": excerpt,
     "keywords": keywords.join(', '),
-    "datePublished": publishDate.toISOString(),
-    "dateModified": publishDate.toISOString(),
+    "datePublished": isoDate,
+    "dateModified": isoDate,
     "author": {
       "@type": "Organization",
       "name": tenantName
@@ -528,7 +546,8 @@ export async function publishExistingArticle(articleId: string) {
         keywords: article.keywords,
         imageUrl: article.imageUrl
       },
-      publishDate: article.createdAt
+      publishDate: article.createdAt,
+      timezone: tenant.setting?.timezone || 'Asia/Makassar'
     })
     cmsPostId = result.id
     cmsPostUrl = result.url
