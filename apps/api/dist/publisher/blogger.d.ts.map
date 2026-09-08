@@ -1,0 +1,1 @@
+{"version":3,"file":"blogger.d.ts","sourceRoot":"","sources":["../../src/publisher/blogger.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,MAAM,EAAE,OAAO,EAAE,MAAM,gBAAgB,CAAA;AAEhD,UAAU,oBAAoB;IAC5B,MAAM,EAAE,MAAM,CAAA;IACd,OAAO,EAAE,OAAO,CAAA;IAChB,QAAQ,CAAC,EAAE,MAAM,GAAG,IAAI,CAAA;CACzB;AAED,wBAAsB,gBAAgB,CAAC,EAAE,MAAM,EAAE,OAAO,EAAE,QAAQ,EAAE,EAAE,oBAAoB;;;GAoDzF"}

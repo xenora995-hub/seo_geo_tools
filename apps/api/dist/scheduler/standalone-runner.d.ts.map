@@ -1,0 +1,1 @@
+{"version":3,"file":"standalone-runner.d.ts","sourceRoot":"","sources":["../../src/scheduler/standalone-runner.ts"],"names":[],"mappings":"AAAA,OAAO,eAAe,CAAA;AAItB,UAAU,aAAa;IACrB,KAAK,CAAC,EAAE,OAAO,CAAA;IACf,UAAU,CAAC,EAAE,MAAM,CAAA;CACpB;AAED,wBAAsB,sBAAsB,CAAC,OAAO,GAAE,aAAkB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GAiGvE"}

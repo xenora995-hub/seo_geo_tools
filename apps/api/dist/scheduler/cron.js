@@ -1,0 +1,162 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.initScheduler = initScheduler;
+exports.getDateStringInTimezone = getDateStringInTimezone;
+exports.runScheduleJob = runScheduleJob;
+exports.registerCron = registerCron;
+exports.unregisterCron = unregisterCron;
+const node_cron_1 = __importDefault(require("node-cron"));
+const prisma_1 = require("../lib/prisma");
+const service_1 = require("../generator/service");
+const telegram_1 = require("../reporter/telegram");
+const telegraf_1 = require("telegraf");
+const activeCrons = new Map();
+async function initScheduler() {
+    console.log('[SCHEDULER] Memuat jadwal dari database...');
+    const schedules = await prisma_1.prisma.schedule.findMany({
+        where: { isActive: true },
+        include: { tenant: { select: { isActive: true } } }
+    });
+    for (const schedule of schedules) {
+        if (!schedule.tenant.isActive)
+            continue;
+        await registerCron(schedule);
+    }
+    // Laporan harian - setiap hari jam 23:00
+    node_cron_1.default.schedule('0 23 * * *', async () => {
+        console.log('[SCHEDULER] Mengirim laporan harian...');
+        const tenants = await prisma_1.prisma.tenant.findMany({ where: { isActive: true } });
+        for (const tenant of tenants) {
+            await (0, telegram_1.sendDailyReport)(tenant.id).catch(console.error);
+        }
+    });
+    // Laporan mingguan - setiap Minggu jam 08:00
+    node_cron_1.default.schedule('0 8 * * 0', async () => {
+        console.log('[SCHEDULER] Mengirim laporan mingguan...');
+        const tenants = await prisma_1.prisma.tenant.findMany({ where: { isActive: true } });
+        for (const tenant of tenants) {
+            await (0, telegram_1.sendWeeklyReport)(tenant.id).catch(console.error);
+        }
+    });
+    console.log(`[SCHEDULER] ✅ ${schedules.length} jadwal aktif dimuat`);
+}
+function getDateStringInTimezone(d, tz = 'Asia/Jakarta') {
+    try {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: tz,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(d);
+    }
+    catch {
+        return d.toISOString().split('T')[0];
+    }
+}
+async function runScheduleJob(scheduleId, options) {
+    const schedule = await prisma_1.prisma.schedule.findUnique({
+        where: { id: scheduleId },
+        include: { tenant: { include: { setting: true } } }
+    });
+    if (!schedule) {
+        return { success: false, message: `Jadwal ID ${scheduleId} tidak ditemukan` };
+    }
+    if (!schedule.isActive && !options?.force) {
+        return { success: false, message: `Jadwal ${schedule.name} sedang tidak aktif` };
+    }
+    if (!schedule.tenant.isActive) {
+        return { success: false, message: `Tenant ${schedule.tenant.name} sedang non-aktif` };
+    }
+    const setting = schedule.tenant.setting;
+    const timezone = setting?.timezone || 'Asia/Jakarta';
+    const now = new Date();
+    const todayStr = getDateStringInTimezone(now, timezone);
+    if (!options?.force) {
+        if (schedule.lastRun && (now.getTime() - new Date(schedule.lastRun).getTime() < 10 * 60 * 1000)) {
+            const msg = `⏳ Jadwal ${schedule.name} baru saja dieksekusi dalam 10 menit terakhir. Melewati eksekusi ganda.`;
+            console.log(`[SCHEDULER] ${msg}`);
+            return { success: true, message: msg };
+        }
+        if (schedule.startDate) {
+            const startStr = getDateStringInTimezone(schedule.startDate, timezone);
+            if (todayStr < startStr) {
+                const msg = `⏳ Jadwal ${schedule.name} belum saatnya dimulai (Hari ini: ${todayStr}, Mulai: ${startStr})`;
+                console.log(`[SCHEDULER] ${msg}`);
+                return { success: false, message: msg };
+            }
+        }
+        if (schedule.endDate) {
+            const endStr = getDateStringInTimezone(schedule.endDate, timezone);
+            if (todayStr > endStr) {
+                const msg = `🛑 Jadwal ${schedule.name} sudah kedaluwarsa (Hari ini: ${todayStr}, Berakhir: ${endStr}). Menonaktifkan jadwal...`;
+                console.log(`[SCHEDULER] ${msg}`);
+                await prisma_1.prisma.schedule.update({ where: { id: schedule.id }, data: { isActive: false } });
+                unregisterCron(schedule.id);
+                return { success: false, message: msg };
+            }
+        }
+    }
+    await prisma_1.prisma.schedule.update({ where: { id: schedule.id }, data: { lastRun: new Date() } });
+    try {
+        const result = await (0, service_1.generateAndPublish)({ tenantId: schedule.tenantId, topic: schedule.topic || undefined });
+        console.log(`[SCHEDULER] ✅ Artikel berhasil diposting untuk jadwal: ${schedule.name} (${schedule.id})`);
+        // Notifikasi Telegram (Sukses)
+        if (setting?.telegramBotToken && setting?.telegramChatId && result?.article?.cmsPostUrl) {
+            try {
+                const bot = new telegraf_1.Telegraf(setting.telegramBotToken);
+                const msg = `✅ *Artikel Web ${schedule.tenant.name} publish done!*\n\nJudul: ${result.article.title}\n🔗 Link: ${result.article.cmsPostUrl}`;
+                await bot.telegram.sendMessage(setting.telegramChatId, msg, { parse_mode: 'Markdown' });
+            }
+            catch (telErr) {
+                console.error('[SCHEDULER] Gagal kirim notif telegram sukses', telErr);
+            }
+        }
+        return { success: true, message: 'Artikel berhasil di-generate dan di-publish', article: result?.article };
+    }
+    catch (err) {
+        console.error(`[SCHEDULER] ❌ Gagal: ${err.message}`);
+        // Notifikasi Telegram (Gagal)
+        if (setting?.telegramBotToken && setting?.telegramChatId) {
+            try {
+                const bot = new telegraf_1.Telegraf(setting.telegramBotToken);
+                const msg = `❌ *Artikel Web ${schedule.tenant.name} publish gagal!*\n\nError: ${err.message}\n⏳ Silakan periksa limit kuota AI atau konfigurasi CMS.`;
+                await bot.telegram.sendMessage(setting.telegramChatId, msg, { parse_mode: 'Markdown' });
+            }
+            catch (telErr) {
+                console.error('[SCHEDULER] Gagal kirim notif telegram error', telErr);
+            }
+        }
+        return { success: false, message: err.message || 'Gagal memproses pembuatan artikel' };
+    }
+}
+async function registerCron(schedule) {
+    // Stop yang lama kalau ada
+    if (activeCrons.has(schedule.id)) {
+        activeCrons.get(schedule.id).stop();
+    }
+    if (!node_cron_1.default.validate(schedule.cronExpr)) {
+        console.warn(`[SCHEDULER] Cron expression tidak valid: ${schedule.cronExpr}`);
+        return;
+    }
+    const setting = await prisma_1.prisma.tenantSetting.findUnique({ where: { tenantId: schedule.tenantId } });
+    const timezone = setting?.timezone || 'Asia/Jakarta';
+    const task = node_cron_1.default.schedule(schedule.cronExpr, async () => {
+        console.log(`[SCHEDULER] ⏰ Memicu eksekusi cron: ${schedule.id} (Timezone: ${timezone})`);
+        // Jeda acak 1 - 20 detik untuk mencegah race condition / 429 jika ada beberapa tenant dijadwalkan bersamaan
+        const jitterDelay = Math.floor(Math.random() * 20000) + 1000;
+        setTimeout(async () => {
+            await runScheduleJob(schedule.id);
+        }, jitterDelay);
+    }, { timezone });
+    activeCrons.set(schedule.id, task);
+}
+function unregisterCron(scheduleId) {
+    if (activeCrons.has(scheduleId)) {
+        activeCrons.get(scheduleId).stop();
+        activeCrons.delete(scheduleId);
+    }
+}
+//# sourceMappingURL=cron.js.map
