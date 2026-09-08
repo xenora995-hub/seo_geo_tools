@@ -75,10 +75,13 @@ async function runScheduleJob(scheduleId, options) {
     const now = new Date();
     const todayStr = getDateStringInTimezone(now, timezone);
     if (!options?.force) {
-        if (schedule.lastRun && (now.getTime() - new Date(schedule.lastRun).getTime() < 10 * 60 * 1000)) {
-            const msg = `⏳ Jadwal ${schedule.name} baru saja dieksekusi dalam 10 menit terakhir. Melewati eksekusi ganda.`;
-            console.log(`[SCHEDULER] ${msg}`);
-            return { success: true, message: msg };
+        if (schedule.lastRun) {
+            const lastRunStr = getDateStringInTimezone(schedule.lastRun, timezone);
+            if (lastRunStr === todayStr) {
+                const msg = `⏳ Jadwal ${schedule.name} sudah dieksekusi hari ini (${todayStr}). Melewati eksekusi ganda.`;
+                console.log(`[SCHEDULER] ${msg}`);
+                return { success: true, message: msg };
+            }
         }
         if (schedule.startDate) {
             const startStr = getDateStringInTimezone(schedule.startDate, timezone);
