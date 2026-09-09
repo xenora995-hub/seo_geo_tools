@@ -103,7 +103,12 @@ async function generateAndPublish(options) {
         let cmsWarning = null;
         try {
             if (tenant.cmsType === 'WORDPRESS') {
-                const result = await (0, wordpress_1.publishToWordPress)({ tenant, article: { ...article, content: finalContent, imageUrl }, imageUrl, publishDate });
+                const result = await (0, wordpress_1.publishToWordPress)({
+                    tenant,
+                    article: { ...article, content: finalContent, imageUrl },
+                    imageUrl,
+                    publishDate: actualPublishDate.toISOString()
+                });
                 cmsPostId = result.id;
                 cmsPostUrl = result.url;
             }
@@ -459,7 +464,7 @@ function formatContentForCms(html) {
         .replace(/<\/?div[^>]*>/gi, '');
     return cleaned;
 }
-async function publishExistingArticle(articleId) {
+async function publishExistingArticle(articleId, customPublishDate) {
     const article = await prisma_1.prisma.article.findUnique({
         where: { id: articleId },
         include: { tenant: { include: { setting: true } } }
@@ -470,9 +475,21 @@ async function publishExistingArticle(articleId) {
     if (!tenant.cmsUrl || !tenant.cmsApiKey) {
         throw new Error('Pengaturan CMS (URL atau API Key) belum diatur di Pengaturan');
     }
+    const timezone = tenant.setting?.timezone || 'Asia/Makassar';
+    const actualPublishDate = customPublishDate ? new Date(customPublishDate) : new Date();
+    // Refresh Schema JSON-LD agar datePublished & dateModified mengikuti tanggal publikasi sekarang
+    let updatedContent = article.content;
+    const newArticleSchema = generateArticleSchema(article.title, article.excerpt || '', article.keywords, actualPublishDate, tenant.name, timezone);
+    const schemaRegex = /<script\s+type=["']application\/ld\+json["']>[\s\S]*?"@type":\s*"Article"[\s\S]*?<\/script>\s*/i;
+    if (schemaRegex.test(updatedContent)) {
+        updatedContent = updatedContent.replace(schemaRegex, newArticleSchema);
+    }
+    else {
+        updatedContent = `${newArticleSchema}${updatedContent}`;
+    }
     let cmsPostId = null;
     let cmsPostUrl = null;
-    const cleanContent = formatContentForCms(article.content);
+    const cleanContent = formatContentForCms(updatedContent);
     if (tenant.cmsType === 'WORDPRESS') {
         const result = await (0, wordpress_1.publishToWordPress)({
             tenant: { cmsUrl: tenant.cmsUrl, cmsApiKey: tenant.cmsApiKey },
@@ -482,7 +499,8 @@ async function publishExistingArticle(articleId) {
                 excerpt: article.excerpt || '',
                 keywords: article.keywords,
                 imageUrl: article.imageUrl
-            }
+            },
+            publishDate: actualPublishDate.toISOString()
         });
         cmsPostId = result.id;
         cmsPostUrl = result.url;
@@ -497,8 +515,8 @@ async function publishExistingArticle(articleId) {
                 keywords: article.keywords,
                 imageUrl: article.imageUrl
             },
-            publishDate: article.createdAt,
-            timezone: tenant.setting?.timezone || 'Asia/Makassar'
+            publishDate: actualPublishDate,
+            timezone
         });
         cmsPostId = result.id;
         cmsPostUrl = result.url;
@@ -517,8 +535,9 @@ async function publishExistingArticle(articleId) {
     const updated = await prisma_1.prisma.article.update({
         where: { id: article.id },
         data: {
+            content: updatedContent,
             status: 'PUBLISHED',
-            publishedAt: new Date(),
+            publishedAt: actualPublishDate,
             cmsPostId,
             cmsPostUrl,
             errorLog: null

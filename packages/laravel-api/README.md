@@ -76,16 +76,18 @@ class SeoPostController extends Controller
 
         $slug = Str::slug($validated['title']);
 
-        $post = Post::create([
-            'title'        => $validated['title'],
-            'slug'         => $slug,
-            'content'      => $validated['content'],
-            'excerpt'      => $validated['excerpt'] ?? '',
-            'image_url'    => $validated['image_url'] ?? null,
-            'meta_keywords'=> implode(', ', $validated['keywords'] ?? []),
-            'status'       => $validated['status'],
-            'published_at' => $validated['published_at'] ?? now(),
-        ]);
+        $post = Post::updateOrCreate(
+            ['slug' => $slug],
+            [
+                'title'        => $validated['title'],
+                'content'      => $validated['content'],
+                'excerpt'      => $validated['excerpt'] ?? '',
+                'image_url'    => $validated['image_url'] ?? null,
+                'meta_keywords'=> implode(', ', $validated['keywords'] ?? []),
+                'status'       => $validated['status'],
+                'published_at' => $validated['published_at'] ?? now(),
+            ]
+        );
 
         return response()->json([
             'success'  => true,

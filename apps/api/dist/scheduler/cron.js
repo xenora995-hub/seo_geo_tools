@@ -102,9 +102,9 @@ async function runScheduleJob(scheduleId, options) {
             }
         }
     }
-    await prisma_1.prisma.schedule.update({ where: { id: schedule.id }, data: { lastRun: new Date() } });
     try {
         const result = await (0, service_1.generateAndPublish)({ tenantId: schedule.tenantId, topic: schedule.topic || undefined });
+        await prisma_1.prisma.schedule.update({ where: { id: schedule.id }, data: { lastRun: new Date() } });
         console.log(`[SCHEDULER] ✅ Artikel berhasil diposting untuk jadwal: ${schedule.name} (${schedule.id})`);
         // Notifikasi Telegram (Sukses)
         if (setting?.telegramBotToken && setting?.telegramChatId && result?.article?.cmsPostUrl) {

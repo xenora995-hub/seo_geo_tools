@@ -43,16 +43,18 @@ class SeoPostController extends Controller
         // Jika model Eloquent Post tersedia di project Laravel klien
         if (class_exists($postModel)) {
             try {
-                $post = $postModel::create([
-                    'title'        => $validated['title'],
-                    'slug'         => $slug,
-                    'content'      => $validated['content'],
-                    'excerpt'      => $validated['excerpt'] ?? '',
-                    'image_url'    => $validated['image_url'] ?? null,
-                    'meta_keywords'=> implode(', ', $validated['keywords'] ?? []),
-                    'status'       => $validated['status'],
-                    'published_at' => $validated['published_at'] ?? now(),
-                ]);
+                $post = $postModel::updateOrCreate(
+                    ['slug' => $slug],
+                    [
+                        'title'        => $validated['title'],
+                        'content'      => $validated['content'],
+                        'excerpt'      => $validated['excerpt'] ?? '',
+                        'image_url'    => $validated['image_url'] ?? null,
+                        'meta_keywords'=> implode(', ', $validated['keywords'] ?? []),
+                        'status'       => $validated['status'],
+                        'published_at' => $validated['published_at'] ?? now(),
+                    ]
+                );
 
                 return response()->json([
                     'success'  => true,

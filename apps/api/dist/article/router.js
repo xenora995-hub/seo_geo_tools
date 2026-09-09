@@ -42,7 +42,8 @@ exports.articleRouter.post('/:id/publish', async (req, res) => {
         });
         if (!article)
             return res.status(404).json({ success: false, message: 'Artikel tidak ditemukan' });
-        const published = await (0, service_1.publishExistingArticle)(article.id);
+        const { publishDate } = req.body || {};
+        const published = await (0, service_1.publishExistingArticle)(article.id, publishDate);
         res.json({ success: true, data: published, message: 'Artikel berhasil dipublikasikan ke website!' });
     }
     catch (err) {

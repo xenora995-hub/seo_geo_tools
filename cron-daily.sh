@@ -25,14 +25,32 @@ HEALTH=$(curl -s -m 3 http://127.0.0.1:4000/health 2>/dev/null)
 if [[ ! "$HEALTH" =~ "ok" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Backend port 4000 belum menyala, menghidupkan via PM2..."
     cd "$API_DIR" || exit 1
-    pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api
+    pm2 resurrect >/dev/null 2>&1 || pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api
     pm2 save >/dev/null 2>&1
-    sleep 3
+    
+    # Tunggu sampai port 4000 benar-benar siap (hingga 15 detik)
+    for i in {1..15}; do
+        sleep 1
+        HEALTH=$(curl -s -m 2 http://127.0.0.1:4000/health 2>/dev/null)
+        if [[ "$HEALTH" =~ "ok" ]]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Backend siap pada detik ke-$i."
+            break
+        fi
+    done
 fi
 
-# 2. Pemicu eksekusi jadwal melalui port internal 4000 (tidak membuat proses Node baru)
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Memanggil pemicu runner..."
+# 2. Pemicu eksekusi jadwal melalui port internal 4000
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Memanggil pemicu runner port 4000..."
 RESPONSE=$(curl -s -m 180 "http://127.0.0.1:4000/api/schedules/runner?secret=seogeo-cron-token-secret")
+
+# 3. Fallback Mandiri jika port 4000 tidak membalas sukses
+if [[ ! "$RESPONSE" =~ "success" ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] ⚠️ Port 4000 tidak merespons, beralih ke Standalone Runner langsung..."
+    NODE_BIN=$(command -v node 2>/dev/null || ls $HOME/.nvm/versions/node/*/bin/node 2>/dev/null | tail -n 1 || echo "/usr/bin/node")
+    if [ -f "$API_DIR/dist/scheduler/standalone-runner.js" ]; then
+        RESPONSE=$("$NODE_BIN" "$API_DIR/dist/scheduler/standalone-runner.js")
+    fi
+fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Hasil eksekusi: $RESPONSE"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Selesai."

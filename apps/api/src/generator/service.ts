@@ -133,7 +133,12 @@ export async function generateAndPublish(options: GenerateOptions) {
 
     try {
       if (tenant.cmsType === 'WORDPRESS') {
-        const result = await publishToWordPress({ tenant, article: { ...article, content: finalContent, imageUrl }, imageUrl, publishDate })
+        const result = await publishToWordPress({ 
+          tenant, 
+          article: { ...article, content: finalContent, imageUrl }, 
+          imageUrl, 
+          publishDate: actualPublishDate.toISOString() 
+        })
         cmsPostId = result.id
         cmsPostUrl = result.url
       } else if (tenant.cmsType === 'LARAVEL') {
@@ -507,7 +512,7 @@ function formatContentForCms(html: string): string {
   return cleaned
 }
 
-export async function publishExistingArticle(articleId: string) {
+export async function publishExistingArticle(articleId: string, customPublishDate?: string | Date | null) {
   const article = await prisma.article.findUnique({
     where: { id: articleId },
     include: { tenant: { include: { setting: true } } }
@@ -518,10 +523,30 @@ export async function publishExistingArticle(articleId: string) {
     throw new Error('Pengaturan CMS (URL atau API Key) belum diatur di Pengaturan')
   }
 
+  const timezone = tenant.setting?.timezone || 'Asia/Makassar'
+  const actualPublishDate = customPublishDate ? new Date(customPublishDate) : new Date()
+
+  // Refresh Schema JSON-LD agar datePublished & dateModified mengikuti tanggal publikasi sekarang
+  let updatedContent = article.content
+  const newArticleSchema = generateArticleSchema(
+    article.title,
+    article.excerpt || '',
+    article.keywords,
+    actualPublishDate,
+    tenant.name,
+    timezone
+  )
+  const schemaRegex = /<script\s+type=["']application\/ld\+json["']>[\s\S]*?"@type":\s*"Article"[\s\S]*?<\/script>\s*/i
+  if (schemaRegex.test(updatedContent)) {
+    updatedContent = updatedContent.replace(schemaRegex, newArticleSchema)
+  } else {
+    updatedContent = `${newArticleSchema}${updatedContent}`
+  }
+
   let cmsPostId: string | null = null
   let cmsPostUrl: string | null = null
 
-  const cleanContent = formatContentForCms(article.content)
+  const cleanContent = formatContentForCms(updatedContent)
 
   if (tenant.cmsType === 'WORDPRESS') {
     const result = await publishToWordPress({
@@ -532,7 +557,8 @@ export async function publishExistingArticle(articleId: string) {
         excerpt: article.excerpt || '',
         keywords: article.keywords,
         imageUrl: article.imageUrl
-      }
+      },
+      publishDate: actualPublishDate.toISOString()
     })
     cmsPostId = result.id
     cmsPostUrl = result.url
@@ -546,8 +572,8 @@ export async function publishExistingArticle(articleId: string) {
         keywords: article.keywords,
         imageUrl: article.imageUrl
       },
-      publishDate: article.createdAt,
-      timezone: tenant.setting?.timezone || 'Asia/Makassar'
+      publishDate: actualPublishDate,
+      timezone
     })
     cmsPostId = result.id
     cmsPostUrl = result.url
@@ -565,8 +591,9 @@ export async function publishExistingArticle(articleId: string) {
   const updated = await prisma.article.update({
     where: { id: article.id },
     data: {
+      content: updatedContent,
       status: 'PUBLISHED',
-      publishedAt: new Date(),
+      publishedAt: actualPublishDate,
       cmsPostId,
       cmsPostUrl,
       errorLog: null

@@ -45,7 +45,7 @@ export declare function generateAndPublish(options: GenerateOptions): Promise<{
     };
     message: string;
 }>;
-export declare function publishExistingArticle(articleId: string): Promise<{
+export declare function publishExistingArticle(articleId: string, customPublishDate?: string | Date | null): Promise<{
     id: string;
     createdAt: Date;
     updatedAt: Date;

@@ -9,7 +9,29 @@ interface PublishOptions {
 }
 
 export function formatPublishDateTo0800(dateInput?: string | Date | null, timezone: string = 'Asia/Makassar'): string {
-  const d = dateInput ? new Date(dateInput) : new Date()
+  if (!dateInput) {
+    const now = new Date()
+    try {
+      const datePart = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(now)
+      return `${datePart} 08:00:00`
+    } catch {
+      return `${now.toISOString().split('T')[0]} 08:00:00`
+    }
+  }
+
+  if (typeof dateInput === 'string') {
+    const match = dateInput.match(/^(\d{4}-\d{2}-\d{2})/)
+    if (match && !dateInput.includes('Z') && !dateInput.includes('T')) {
+      return `${match[1]} 08:00:00`
+    }
+  }
+
+  const d = new Date(dateInput)
   let datePart = ''
   try {
     datePart = new Intl.DateTimeFormat('en-CA', {

@@ -106,10 +106,9 @@ export async function runScheduleJob(scheduleId: string, options?: { force?: boo
     }
   }
 
-  await prisma.schedule.update({ where: { id: schedule.id }, data: { lastRun: new Date() } })
-
   try {
     const result = await generateAndPublish({ tenantId: schedule.tenantId, topic: schedule.topic || undefined })
+    await prisma.schedule.update({ where: { id: schedule.id }, data: { lastRun: new Date() } })
     console.log(`[SCHEDULER] ✅ Artikel berhasil diposting untuk jadwal: ${schedule.name} (${schedule.id})`)
 
     // Notifikasi Telegram (Sukses)

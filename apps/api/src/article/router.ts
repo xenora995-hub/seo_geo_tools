@@ -45,7 +45,8 @@ articleRouter.post('/:id/publish', async (req, res) => {
     })
     if (!article) return res.status(404).json({ success: false, message: 'Artikel tidak ditemukan' })
 
-    const published = await publishExistingArticle(article.id)
+    const { publishDate } = req.body || {}
+    const published = await publishExistingArticle(article.id, publishDate)
     res.json({ success: true, data: published, message: 'Artikel berhasil dipublikasikan ke website!' })
   } catch (err: any) {
     res.status(400).json({ success: false, message: err.message })
