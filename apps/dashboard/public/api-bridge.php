@@ -98,13 +98,13 @@ if ($res['err'] && strpos($request_uri, '/api/schedules/runner') !== false) {
         $env = get_api_environment();
         $runner_js = "{$env['api_dir']}/dist/scheduler/standalone-runner.js";
         if (file_exists($runner_js)) {
-            $node_bin = exec("export {$env['path_env']} && command -v node 2>/dev/null") ?: 'node';
+            $node_bin = exec("export {$env['path_env']} && (command -v node 2>/dev/null || ls {$env['home']}/.nvm/versions/node/*/bin/node 2>/dev/null | tail -n 1 || echo '/usr/bin/node')");
             $force_flag = (isset($_GET['force']) && $_GET['force'] === 'true') ? '--force' : '';
-            $out = shell_exec("export {$env['path_env']} && cd " . escapeshellarg($env['api_dir']) . " && {$node_bin} " . escapeshellarg($runner_js) . " {$force_flag} 2>&1");
+            $schedule_id_flag = isset($_GET['scheduleId']) ? ('--scheduleId=' . escapeshellarg($_GET['scheduleId'])) : '';
+            $out = shell_exec("export {$env['path_env']} && cd " . escapeshellarg($env['api_dir']) . " && {$node_bin} " . escapeshellarg($runner_js) . " {$force_flag} {$schedule_id_flag} 2>&1");
             header('Content-Type: application/json');
-            $json_pos = strpos($out, '{');
-            if ($json_pos !== false) {
-                echo substr($out, $json_pos);
+            if (preg_match('/\{[\s\S]*\}\s*$/', (string)$out, $m)) {
+                echo $m[0];
             } else {
                 echo json_encode(['success' => true, 'message' => 'Executed via standalone runner fallback', 'output' => $out]);
             }
