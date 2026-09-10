@@ -31,56 +31,54 @@ Kami telah membangun arsitektur **3 Lapis Perlindungan (Triple Redundancy)**:
 
 ## 3. Langkah Update di Server Hostinger (SSH)
 
-Jalankan perintah berikut di terminal SSH Hostinger Anda:
+Jalankan perintah berikut di terminal SSH Hostinger Anda (cukup copy-paste 1 blok ini):
 
 ```bash
 cd ~/seo-geo-tools
 git pull origin main
-cd apps/api
-npm run build
-pm2 restart seogeo-api || pm2 start dist/index.js --name seogeo-api
-pm2 save
-```
+chmod +x cron-daily.sh keep-alive.sh
 
-Beri izin eksekusi script:
-```bash
-chmod +x ~/seo-geo-tools/cron-daily.sh
-chmod +x ~/seo-geo-tools/keep-alive.sh
+# Salin api-bridge.php terbaru ke public_html agar web & web-cron aktif
+find ~ -name "api-bridge.php" -path "*/public_html/*" -exec cp ~/seo-geo-tools/apps/dashboard/public/api-bridge.php {} \;
+
+# Restart service dashboard via PM2
+cd apps/api
+pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api
+pm2 save
 ```
 
 ---
 
 ## 4. Pengaturan Cron di hPanel Hostinger
 
+⚠️ **PENTING: Server Hostinger Beroperasi Menggunakan Zona Waktu UTC (Bukan WITA/WIB)**:
+- Jam `08:00 WITA` (Bali/Makassar / UTC+8) adalah sama dengan jam **`00:00 UTC`** (Tengah Malam Server).
+- Jika Anda memasang jam `8` di hPanel, server baru akan mengeksekusi pada jam **`16:00 WITA` (4 sore)**!
+
 Buka **hPanel Hostinger** -> Menu **Tingkat Lanjut (Advanced)** -> **Cron Jobs** -> Pilih **Kustom (Custom)**:
 
-### Cron 1: Pemicu Eksekusi Artikel Jam 8 Pagi (WAJIB)
-Menjalankan generator artikel mandiri setiap hari jam 08:00 pagi WITA:
+### Cron Pemicu Artikel Harian (WAJIB)
 - **Perintah (Command)**:
   ```bash
   bash ~/seo-geo-tools/cron-daily.sh > ~/seo-geo-tools/cron-daily.log 2>&1
   ```
-- **Waktu**:
+- **Waktu Jam 08:00 Pagi WITA**:
   - Menit: `0`
-  - Jam: `8` (atau sesuaikan dengan jam server Hostinger jika server menggunakan UTC, misal jam 00:00 UTC = 08:00 WITA)
+  - Jam: `0` *(Karena 00:00 UTC = 08:00 WITA)*
   - Hari, Bulan, Hari Kerja: `*`
 
-### Cron 2: Penjaga Hidup Dashboard (Setiap 5 atau 10 Menit)
-Memastikan dashboard admin selalu siap dibuka tanpa jeda:
-- **Perintah (Command)**:
-  ```bash
-  bash ~/seo-geo-tools/keep-alive.sh > /dev/null 2>&1
-  ```
-- **Waktu**: Pilih `Setiap 5 menit` (`*/5 * * * *`).
+> 💡 **Trik Anti-Meleset**: Sistem kami sudah memiliki proteksi **1 Hari = 1 Artikel**. Jika Anda ingin 1000% aman dari selisih jam server, Anda bahkan bisa menyetel cron berjalan **Setiap Jam** (`0 * * * *`). Begitu jam 8 pagi lewat, artikel langsung terbit, dan jam-jam berikutnya otomatis di-skip karena proteksi anti-dobel!
 
 ---
 
-## 5. Cadangan Anti-Gagal: Web-Cron Gratis (cron-job.org)
+## 5. Cadangan Eksternal Gratis (cron-job.org)
 
-Jika cron internal Hostinger sewaktu-waktu terlambat atau ditunda oleh sistem hosting, Anda bisa menambahkan webhook gratis di [cron-job.org](https://cron-job.org):
+Untuk kepastian mutlak tanpa bergantung pada pengaturan server Hostinger, Anda bisa memasang Web-Cron gratis di [cron-job.org](https://cron-job.org):
 - **URL**:
   ```
   https://seo.baliphonerepair.com/api/schedules/runner?secret=seogeo-cron-token-secret
   ```
-- **Jadwal**: Setiap hari jam `08:00` (Pilih timezone: `Asia/Makassar` atau `Asia/Singapore` / UTC+8).
-- Berkat Lapis 2 (`api-bridge.php`), URL ini akan sukses 100% menerbitkan artikel hari itu meskipun backend Node.js sedang mati!
+- **Jadwal**: Setiap hari jam `08:00`
+- **Timezone**: Pilih langsung `Asia/Makassar` (WITA, UTC+8) atau `Asia/Jakarta` (WIB, UTC+7) di dropdown situsnya.
+- Berkat update `api-bridge.php` terbaru, endpoint ini akan langsung mengeksekusi penerbitan artikel secara otomatis meskipun service backend port 4000 di Hostinger sedang dimatikan!
+
