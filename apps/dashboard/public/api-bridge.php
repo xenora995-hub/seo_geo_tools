@@ -22,10 +22,24 @@ $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $target_url = "http://127.0.0.1:{$node_port}" . $request_uri;
 
-// Helper untuk mencoba membangunkan backend seogeo-api jika tertidur
+// Helper untuk mencoba membangunkan backend seogeo-api jika environment PHP mengizinkan
 function safe_wake_backend() {
-    // Jalankan via shell tanpa memicu open_basedir restriction
-    @exec("bash -c 'source ~/.bashrc 2>/dev/null; cd ~/seo-geo-tools/apps/api && (pm2 resurrect 2>/dev/null || pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api 2>/dev/null || nohup node dist/index.js > seogeo-api.log 2>&1 &)' > /dev/null 2>&1 &");
+    $cmd = "bash -c 'source ~/.bashrc 2>/dev/null; cd ~/seo-geo-tools/apps/api && (pm2 resurrect 2>/dev/null || pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api 2>/dev/null || nohup node dist/index.js > seogeo-api.log 2>&1 &)' > /dev/null 2>&1 &";
+
+    if (function_exists('exec')) {
+        @exec($cmd);
+        return true;
+    } elseif (function_exists('shell_exec')) {
+        @shell_exec($cmd);
+        return true;
+    } elseif (function_exists('system')) {
+        @system($cmd);
+        return true;
+    } elseif (function_exists('passthru')) {
+        @passthru($cmd);
+        return true;
+    }
+    return false;
 }
 
 // Helper cURL yang aman dari batasan open_basedir
@@ -86,11 +100,12 @@ if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
 // 1. Eksekusi request pertama ke Express port 4000
 $res = forward_request($target_url, $method, $headers, $body);
 
-// 2. Jika gagal koneksi (port 4000 belum menyala), bangunkan dan coba sekali lagi
+// 2. Jika gagal koneksi (port 4000 belum menyala), coba bangunkan backend jika diizinkan server
 if ($res['err']) {
-    safe_wake_backend();
-    sleep(2); // beri waktu proses Node/PM2 hidup
-    $res = forward_request($target_url, $method, $headers, $body);
+    if (safe_wake_backend()) {
+        sleep(2); // beri waktu proses Node/PM2 hidup
+        $res = forward_request($target_url, $method, $headers, $body);
+    }
 }
 
 // 3. Output hasil
@@ -99,7 +114,7 @@ if ($res['err']) {
     header('Content-Type: application/json');
     echo json_encode([
         'success' => false,
-        'message' => 'Backend API service (port 4000) sedang offline atau sedang dibangunkan otomatis. Silakan tunggu beberapa detik dan refresh halaman.',
+        'message' => 'Backend API service (port 4000) sedang offline. Pastikan service seogeo-api berjalan via PM2 di server.',
         'detail' => $res['errmsg'] ?: 'Connection refused to 127.0.0.1:4000'
     ]);
 } else {
