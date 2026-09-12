@@ -4,9 +4,9 @@ node_modules/
 
 # Production builds
 .next/
-out/
 build/
 !apps/api/dist/
+!apps/dashboard/out/
 
 # Environment variables & secrets
 .env

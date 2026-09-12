@@ -1,0 +1,27 @@
+Options -MultiViews -Indexes
+DirectoryIndex index.html index.php
+
+RewriteEngine On
+RewriteBase /
+
+# 1. Pastikan endpoint API selalu diteruskan ke PHP Bridge
+RewriteRule ^api/(.*)$ api-bridge.php [QSA,L]
+RewriteRule ^api$ api-bridge.php [QSA,L]
+
+# 2. Pastikan rute utama diarahkan dengan trailing slash agar index.html folder disajikan
+RewriteRule ^dashboard$ /dashboard/ [R=301,L]
+RewriteRule ^login$ /login/ [R=301,L]
+
+# 3. Jika file atau folder fisik ada (termasuk folder _next/static), sajikan langsung
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# 4. Dukungan backward-compatibility jika terdapat file .html langsung
+RewriteCond %{DOCUMENT_ROOT}/$1.html -f
+RewriteRule ^(.*)$ $1.html [L]
+
+# 5. Fallback ke index.html (HANYA jika bukan file statis aset gambar/css/js/php)
+RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|php)$ [NC]
+RewriteRule ^ index.html [L]
+
