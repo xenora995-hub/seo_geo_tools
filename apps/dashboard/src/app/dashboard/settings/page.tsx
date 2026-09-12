@@ -19,7 +19,7 @@ function SettingsContent() {
     telegramBotToken: '',
     telegramChatId: '',
     articlesPerDay: 1,
-    imageStyle: 'professional photography, clean background',
+    imageStyle: 'tanpa gambar (Full Teks)',
     businessNiche: '',
     targetKeywords: '',
     competitors: '',
@@ -49,7 +49,7 @@ function SettingsContent() {
           telegramBotToken: d.telegramBotToken || '',
           telegramChatId: d.telegramChatId || '',
           articlesPerDay: d.articlesPerDay || 1,
-          imageStyle: d.imageStyle || 'professional photography, clean background',
+          imageStyle: d.imageStyle || 'tanpa gambar (Full Teks)',
           businessNiche: d.businessNiche || '',
           targetKeywords: Array.isArray(d.targetKeywords) ? d.targetKeywords.join(', ') : '',
           competitors: Array.isArray(d.competitors) ? d.competitors.join(', ') : '',
@@ -263,14 +263,14 @@ function SettingsContent() {
                 />
               </div>
               <div>
-                <label>Gaya Gambar AI</label>
+                <label>Format Artikel / Gambar</label>
                 <input
                   value={form.imageStyle}
                   onChange={e => setForm({ ...form, imageStyle: e.target.value })}
-                  placeholder="professional photography, clean background (atau 'none')"
+                  placeholder="tanpa gambar (Full Teks)"
                 />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                  Ketik <strong>none</strong> atau <strong>tanpa gambar</strong> jika ingin mempublikasikan artikel murni teks tanpa gambar banner.
+                  Default: <strong>tanpa gambar</strong>. Sistem mempublikasikan artikel murni full-text yang mendalam tanpa gambar banner / featured image.
                 </span>
               </div>
             </div>

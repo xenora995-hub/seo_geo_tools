@@ -85,19 +85,11 @@ async function generateAndPublish(options) {
         }
     });
     try {
-        // 3. Generate gambar (Opsional: dinonaktifkan jika imageStyle = 'none' atau 'tanpa gambar')
-        const isImageDisabled = !setting.imageStyle ||
-            ['none', 'tanpa gambar', 'no image', 'disable', 'disabled', 'off'].includes(setting.imageStyle.trim().toLowerCase());
-        let imageUrl = null;
-        if (!isImageDisabled) {
-            console.log(`[GENERATOR] Mengambil gambar gratis untuk: ${article.title}`);
-            imageUrl = await generateImage(articleData.imagePrompt, setting.imageStyle);
-            await prisma_1.prisma.article.update({ where: { id: article.id }, data: { imageUrl } });
-        }
-        else {
-            console.log(`[GENERATOR] Pembuatan gambar dinonaktifkan (tanpa gambar) untuk: ${tenant.name}`);
-        }
-        // 4. Publish ke CMS
+        // 3. Mode Full Artikel Teks Murni (Tanpa Gambar)
+        // Sesuai preferensi, seluruh artikel dibuat murni teks/full artikel tanpa gambar banner / featured media
+        const imageUrl = null;
+        console.log(`[GENERATOR] Mode Full Artikel Murni (tanpa gambar) untuk: ${tenant.name}`);
+        // 4. Publish ke CMS (Murni Teks, imageUrl = null)
         let cmsPostId = null;
         let cmsPostUrl = null;
         let cmsWarning = null;
@@ -105,8 +97,8 @@ async function generateAndPublish(options) {
             if (tenant.cmsType === 'WORDPRESS') {
                 const result = await (0, wordpress_1.publishToWordPress)({
                     tenant,
-                    article: { ...article, content: finalContent, imageUrl },
-                    imageUrl,
+                    article: { ...article, content: finalContent, imageUrl: null },
+                    imageUrl: null,
                     publishDate: actualPublishDate.toISOString()
                 });
                 cmsPostId = result.id;
@@ -115,8 +107,8 @@ async function generateAndPublish(options) {
             else if (tenant.cmsType === 'LARAVEL') {
                 const result = await (0, laravel_1.publishToLaravel)({
                     tenant,
-                    article: { ...article, content: finalContent, imageUrl },
-                    imageUrl,
+                    article: { ...article, content: finalContent, imageUrl: null },
+                    imageUrl: null,
                     publishDate: actualPublishDate,
                     timezone
                 });
@@ -124,7 +116,7 @@ async function generateAndPublish(options) {
                 cmsPostUrl = result.url;
             }
             else if (tenant.cmsType === 'BLOGGER') {
-                const result = await (0, blogger_1.publishToBlogger)({ tenant, article: { ...article, content: finalContent, imageUrl }, imageUrl });
+                const result = await (0, blogger_1.publishToBlogger)({ tenant, article: { ...article, content: finalContent, imageUrl: null }, imageUrl: null });
                 cmsPostId = result.id;
                 cmsPostUrl = result.url;
             }
@@ -254,13 +246,15 @@ async function generateArticle(genAI, topic, keywords, language, customPrompt = 
 - Instead use: "many technicians report...", "common experience shows...", "most users find..."
 - NEVER invent study names, research institutions, or survey results.
 - If making a factual claim, add the source inline as an HTML anchor tag: <a href="[url]" rel="nofollow">[source name]</a>
-- Every article MUST contain at least one real external link to a credible source (manufacturer site, official support, or known tech publication).`
+- Every article MUST contain at least one real external link to a credible source (manufacturer site, official support, or known tech publication).
+- DO NOT insert any <img> tags, image markdown, or picture placeholders. The article must be 100% full text only.`
         : `ATURAN INTEGRITAS KONTEN KETAT:
 - JANGAN PERNAH mengarang statistik, persentase, atau angka palsu kecuali berasal dari URL nyata yang dapat dikutip langsung.
 - Gunakan frasa: "banyak teknisi mencatat...", "pengalaman umum menunjukkan...", "sebagian besar pengguna menemukan..."
 - JANGAN PERNAH mengarang nama riset, institusi survei, atau data penelitian fiktif.
 - Jika membuat klaim faktual, sertakan sumber tautan: <a href="[url]" rel="nofollow">[nama sumber]</a>
-- Setiap artikel WAJIB memiliki minimal 1 tautan eksternal ke sumber kredibel.`;
+- Setiap artikel WAJIB memiliki minimal 1 tautan eksternal ke sumber kredibel.
+- DILARANG menyertakan tag <img>, URL gambar, atau placeholder gambar apapun. Artikel harus 100% full teks/tulisan lengkap.`;
     const geoRules = isEn ? `GEO OPTIMIZATION RULES (for Generative AI Search & Citations):
 - Start the article immediately with a 2-3 sentence "direct answer" paragraph that summarizes the entire solution. Label it with: <p class="geo-summary"><strong>Quick Answer:</strong> [summary]</p>
 - Use explicit definition format for key terms: "[Term] is defined as..."
@@ -442,7 +436,11 @@ function formatContentForCms(html) {
         .replace(/\\"/g, '"')
         .replace(/\\'/g, "'")
         .replace(/\\\\/g, '\\');
-    // 1. Convert <table> to clean semantic list to prevent CMS HTML parser crashes
+    // 1. Remove any <img> and <figure> tags to ensure 100% full-text articles without pictures
+    cleaned = cleaned
+        .replace(/<figure[^>]*>[\s\S]*?<\/figure>/gi, '')
+        .replace(/<img[^>]*>/gi, '');
+    // 2. Convert <table> to clean semantic list to prevent CMS HTML parser crashes
     cleaned = cleaned.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
         const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
         if (rows.length <= 1)
@@ -458,7 +456,7 @@ function formatContentForCms(html) {
         listHtml += '</ul>';
         return listHtml;
     });
-    // 2. Remove wrapper <div> tags which some CMS sanitizers reject
+    // 3. Remove wrapper <div> tags which some CMS sanitizers reject
     cleaned = cleaned
         .replace(/<div\s+class=["'][^"']*faq-section[^"']*["']\s*>/gi, '')
         .replace(/<\/?div[^>]*>/gi, '');
@@ -498,8 +496,9 @@ async function publishExistingArticle(articleId, customPublishDate) {
                 content: cleanContent,
                 excerpt: article.excerpt || '',
                 keywords: article.keywords,
-                imageUrl: article.imageUrl
+                imageUrl: null
             },
+            imageUrl: null,
             publishDate: actualPublishDate.toISOString()
         });
         cmsPostId = result.id;
@@ -513,8 +512,9 @@ async function publishExistingArticle(articleId, customPublishDate) {
                 content: cleanContent,
                 excerpt: article.excerpt || '',
                 keywords: article.keywords,
-                imageUrl: article.imageUrl
+                imageUrl: null
             },
+            imageUrl: null,
             publishDate: actualPublishDate,
             timezone
         });
@@ -524,7 +524,8 @@ async function publishExistingArticle(articleId, customPublishDate) {
     else if (tenant.cmsType === 'BLOGGER') {
         const result = await (0, blogger_1.publishToBlogger)({
             tenant: tenant,
-            article: article
+            article: { ...article, content: cleanContent },
+            imageUrl: null
         });
         cmsPostId = result.id;
         cmsPostUrl = result.url;

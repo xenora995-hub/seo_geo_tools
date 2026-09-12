@@ -72,7 +72,7 @@ settingsRouter.patch('/', async (req, res) => {
         telegramBotToken: telegramBotToken || null,
         telegramChatId: telegramChatId || null,
         articlesPerDay: articlesPerDay !== undefined ? Number(articlesPerDay) : 1,
-        imageStyle: imageStyle || 'professional photography, clean background',
+        imageStyle: imageStyle || 'tanpa gambar (Full Teks)',
         businessNiche: businessNiche || null,
         targetKeywords: Array.isArray(targetKeywords) ? targetKeywords : [],
         competitors: Array.isArray(competitors) ? competitors : [],
