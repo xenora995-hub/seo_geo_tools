@@ -45,6 +45,9 @@ app.get('/', (_, res) => {
 app.get('/health', (_, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
+app.get('/api/health', (_, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
 
 // Routes
 app.use('/api/auth', authRouter)

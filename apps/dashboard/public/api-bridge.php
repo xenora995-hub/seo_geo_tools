@@ -1,51 +1,47 @@
 <?php
 // ==============================================================================
 // PHP Bridge Gateway to local Node.js Express API on port 4000
-// With Self-Healing Auto-Wake via PM2 (Single-Process Architecture)
+// Resilient, Open_basedir Safe & Single-Process PM2 Architecture
 // ==============================================================================
 
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+
+set_exception_handler(function(Throwable $e) {
+    http_response_code(502);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'message' => 'Backend API bridge error: ' . $e->getMessage()
+    ]);
+    exit;
+});
+
 $node_port = 4000;
-$request_uri = $_SERVER['REQUEST_URI'];
-$method = $_SERVER['REQUEST_METHOD'];
+$request_uri = $_SERVER['REQUEST_URI'] ?? '/';
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $target_url = "http://127.0.0.1:{$node_port}" . $request_uri;
 
-// Helper untuk mencari root project dan path binary
-function get_api_environment() {
-    $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
-    if (!$home) {
-        $doc_root = $_SERVER['DOCUMENT_ROOT'] ?? '';
-        if (preg_match('#^(/home[^/]+/[^/]+)#', $doc_root, $m)) {
-            $home = $m[1];
-        }
-    }
-    $root = $home ? "{$home}/seo-geo-tools" : dirname(dirname(dirname(__DIR__)));
-    $api_dir = "{$root}/apps/api";
-    $latest_node = @exec("ls {$home}/.nvm/versions/node 2>/dev/null | tail -n 1");
-    $path_env = "PATH=\$PATH:/usr/local/bin:/usr/bin:/bin:{$home}/.nvm/versions/node/{$latest_node}/bin:{$home}/.npm-global/bin:{$home}/bin";
-    return ['home' => $home, 'root' => $root, 'api_dir' => $api_dir, 'path_env' => $path_env];
+// Helper untuk mencoba membangunkan backend seogeo-api jika tertidur
+function safe_wake_backend() {
+    // Jalankan via shell tanpa memicu open_basedir restriction
+    @exec("bash -c 'source ~/.bashrc 2>/dev/null; cd ~/seo-geo-tools/apps/api && (pm2 resurrect 2>/dev/null || pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api 2>/dev/null || nohup node dist/index.js > seogeo-api.log 2>&1 &)' > /dev/null 2>&1 &");
 }
 
-// Helper untuk membangunkan backend seogeo-api jika tertidur
-function wake_backend() {
-    $env = get_api_environment();
-    $api_dir = $env['api_dir'];
-    $path_env = $env['path_env'];
-
-    if (file_exists("{$api_dir}/dist/index.js")) {
-        $cmd = "export {$path_env} && cd " . escapeshellarg($api_dir) . " && (pm2 resurrect > /dev/null 2>&1 || pm2 restart seogeo-api > /dev/null 2>&1 || pm2 start dist/index.js --name seogeo-api > /dev/null 2>&1 || nohup node dist/index.js > seogeo-api.log 2>&1 &)";
-        @exec($cmd);
+// Helper cURL yang aman dari batasan open_basedir
+function forward_request($url, $method, $headers, $body, $timeout = 120) {
+    if (!function_exists('curl_init')) {
+        return ['resp' => null, 'code' => 500, 'ct' => 'application/json', 'err' => 1, 'errmsg' => 'PHP cURL extension not available'];
     }
-}
 
-// Helper cURL
-function forward_request($url, $method, $headers, $body, $timeout = 180) {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    // Jangan gunakan CURLOPT_FOLLOWLOCATION karena dilarang jika open_basedir aktif di Hostinger
     curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    if ($body !== null) {
+    if ($body !== null && strlen($body) > 0) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
     }
     $resp = curl_exec($ch);
@@ -57,21 +53,28 @@ function forward_request($url, $method, $headers, $body, $timeout = 180) {
     return ['resp' => $resp, 'code' => $code, 'ct' => $ct, 'err' => $err, 'errmsg' => $errmsg];
 }
 
-// Forward headers
+// Filter dan forward headers (abaikan hop-by-hop headers)
 $headers = [];
+$ignored_headers = ['host', 'connection', 'transfer-encoding', 'content-length'];
+
 if (function_exists('getallheaders')) {
     foreach (getallheaders() as $name => $value) {
-        if (strtolower($name) === 'host') continue;
+        if (in_array(strtolower($name), $ignored_headers)) continue;
         $headers[] = "{$name}: {$value}";
     }
 } else {
     foreach ($_SERVER as $name => $value) {
-        if (substr($name, 0, 5) == 'HTTP_') {
+        if (substr($name, 0, 5) === 'HTTP_') {
             $headerName = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
-            if (strtolower($headerName) === 'host') continue;
+            if (in_array(strtolower($headerName), $ignored_headers)) continue;
             $headers[] = "{$headerName}: {$value}";
         }
     }
+}
+
+// Tambahkan header Content-Type jika ada di $_SERVER
+if (isset($_SERVER['CONTENT_TYPE']) && !empty($_SERVER['CONTENT_TYPE'])) {
+    $headers[] = "Content-Type: " . $_SERVER['CONTENT_TYPE'];
 }
 
 // Forward body
@@ -80,37 +83,14 @@ if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
     $body = file_get_contents('php://input');
 }
 
-// 1. Eksekusi request pertama
+// 1. Eksekusi request pertama ke Express port 4000
 $res = forward_request($target_url, $method, $headers, $body);
 
-// 2. Jika gagal koneksi (port 4000 mati), bangunkan backend dan coba lagi
+// 2. Jika gagal koneksi (port 4000 belum menyala), bangunkan dan coba sekali lagi
 if ($res['err']) {
-    wake_backend();
-    sleep(3); // beri waktu agar proses Node / PM2 siap
+    safe_wake_backend();
+    sleep(2); // beri waktu proses Node/PM2 hidup
     $res = forward_request($target_url, $method, $headers, $body);
-}
-
-// 3. Jika ini adalah panggilan pemicu cron runner dan port 4000 masih belum bangun, eksekusi mandiri
-if ($res['err'] && strpos($request_uri, '/api/schedules/runner') !== false) {
-    $secret = $_GET['secret'] ?? ($_SERVER['HTTP_X_CRON_SECRET'] ?? '');
-    $valid_secret = getenv('CRON_SECRET') ?: 'seogeo-cron-token-secret';
-    if ($secret === $valid_secret) {
-        $env = get_api_environment();
-        $runner_js = "{$env['api_dir']}/dist/scheduler/standalone-runner.js";
-        if (file_exists($runner_js)) {
-            $node_bin = exec("export {$env['path_env']} && (command -v node 2>/dev/null || ls {$env['home']}/.nvm/versions/node/*/bin/node 2>/dev/null | tail -n 1 || echo '/usr/bin/node')");
-            $force_flag = (isset($_GET['force']) && $_GET['force'] === 'true') ? '--force' : '';
-            $schedule_id_flag = isset($_GET['scheduleId']) ? ('--scheduleId=' . escapeshellarg($_GET['scheduleId'])) : '';
-            $out = shell_exec("export {$env['path_env']} && cd " . escapeshellarg($env['api_dir']) . " && {$node_bin} " . escapeshellarg($runner_js) . " {$force_flag} {$schedule_id_flag} 2>&1");
-            header('Content-Type: application/json');
-            if (preg_match('/\{[\s\S]*\}\s*$/', (string)$out, $m)) {
-                echo $m[0];
-            } else {
-                echo json_encode(['success' => true, 'message' => 'Executed via standalone runner fallback', 'output' => $out]);
-            }
-            exit;
-        }
-    }
 }
 
 // 3. Output hasil
@@ -119,12 +99,14 @@ if ($res['err']) {
     header('Content-Type: application/json');
     echo json_encode([
         'success' => false,
-        'message' => 'Backend API service sedang dibangunkan otomatis. Silakan refresh halaman dalam beberapa detik.'
+        'message' => 'Backend API service (port 4000) sedang offline atau sedang dibangunkan otomatis. Silakan tunggu beberapa detik dan refresh halaman.',
+        'detail' => $res['errmsg'] ?: 'Connection refused to 127.0.0.1:4000'
     ]);
 } else {
-    http_response_code($res['code']);
+    http_response_code($res['code'] ?: 200);
     if ($res['ct']) {
         header("Content-Type: {$res['ct']}");
     }
     echo $res['resp'];
 }
+
