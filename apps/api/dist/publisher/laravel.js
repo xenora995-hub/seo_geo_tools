@@ -57,6 +57,7 @@ async function publishToLaravel(options) {
         excerpt: article.excerpt,
         image_url: article.imageUrl || null,
         keywords: article.keywords,
+        author: article.author || 'Bali Phone Repair Team',
         status: 'published',
         published_at: publishedAt,
     }, {

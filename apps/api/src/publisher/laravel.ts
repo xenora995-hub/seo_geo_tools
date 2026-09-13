@@ -2,7 +2,7 @@ import axios from 'axios'
 
 interface PublishOptions {
   tenant: { cmsUrl: string; cmsApiKey: string }
-  article: { title: string; content: string; excerpt: string; keywords: string[]; imageUrl?: string | null }
+  article: { title: string; content: string; excerpt: string; keywords: string[]; imageUrl?: string | null; author?: string }
   imageUrl?: string | null
   publishDate?: string | Date | null
   timezone?: string
@@ -62,6 +62,7 @@ export async function publishToLaravel(options: PublishOptions) {
     excerpt: article.excerpt,
     image_url: article.imageUrl || null,
     keywords: article.keywords,
+    author: article.author || 'Bali Phone Repair Team',
     status: 'published',
     published_at: publishedAt,
   }, {

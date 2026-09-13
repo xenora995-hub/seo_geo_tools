@@ -1,6 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateAndPublish = generateAndPublish;
+exports.getDynamicAuthor = getDynamicAuthor;
+exports.getArticleUrl = getArticleUrl;
+exports.generateArticleSchema = generateArticleSchema;
+exports.generateFaqSchema = generateFaqSchema;
+exports.generateLocalBusinessSchema = generateLocalBusinessSchema;
 exports.publishExistingArticle = publishExistingArticle;
 const generative_ai_1 = require("@google/generative-ai");
 const prisma_1 = require("../lib/prisma");
@@ -65,13 +70,16 @@ async function generateAndPublish(options) {
     // 1. Generate artikel
     console.log(`[GENERATOR] Membuat artikel dengan Gemini: ${topicToWrite}`);
     const articleData = await generateArticle(genAI, topicToWrite, targetKeywords, tenant.language, setting.customPrompt);
-    // Injeksi Schema JSON-LD (Article di awal & FAQ di akhir)
+    // Injeksi 3 Schema JSON-LD (Article, LocalBusiness, dan FAQ)
     const timezone = setting.timezone || 'Asia/Makassar';
     const actualPublishDate = publishDate ? new Date(publishDate) : new Date();
-    const articleSchema = generateArticleSchema(articleData.title, articleData.excerpt, articleData.suggestedKeywords, actualPublishDate, tenant.name, timezone);
+    const authorName = getDynamicAuthor(`${topicToWrite || ''} ${articleData.title}`);
+    const articleUrl = getArticleUrl(articleData.title, tenant.cmsUrl);
+    const articleSchema = generateArticleSchema(articleData.title, articleData.excerpt, articleData.suggestedKeywords, actualPublishDate, authorName, articleUrl, timezone);
+    const localBusinessSchema = generateLocalBusinessSchema();
     const faqSchema = generateFaqSchema(articleData.content);
     const cleanedContent = formatContentForCms(articleData.content);
-    const finalContent = `${articleSchema}${cleanedContent}${faqSchema}`;
+    const finalContent = `${articleSchema}${localBusinessSchema}${cleanedContent}${faqSchema ? `\n${faqSchema}` : ''}`;
     // 2. Simpan ke DB sebagai PENDING
     const article = await prisma_1.prisma.article.create({
         data: {
@@ -88,7 +96,7 @@ async function generateAndPublish(options) {
         // 3. Mode Full Artikel Teks Murni (Tanpa Gambar)
         // Sesuai preferensi, seluruh artikel dibuat murni teks/full artikel tanpa gambar banner / featured media
         const imageUrl = null;
-        console.log(`[GENERATOR] Mode Full Artikel Murni (tanpa gambar) untuk: ${tenant.name}`);
+        console.log(`[GENERATOR] Mode Full Artikel Murni (tanpa gambar) untuk: ${tenant.name} | Author: ${authorName}`);
         // 4. Publish ke CMS (Murni Teks, imageUrl = null)
         let cmsPostId = null;
         let cmsPostUrl = null;
@@ -97,7 +105,7 @@ async function generateAndPublish(options) {
             if (tenant.cmsType === 'WORDPRESS') {
                 const result = await (0, wordpress_1.publishToWordPress)({
                     tenant,
-                    article: { ...article, content: finalContent, imageUrl: null },
+                    article: { ...article, content: finalContent, imageUrl: null, author: authorName },
                     imageUrl: null,
                     publishDate: actualPublishDate.toISOString()
                 });
@@ -107,7 +115,7 @@ async function generateAndPublish(options) {
             else if (tenant.cmsType === 'LARAVEL') {
                 const result = await (0, laravel_1.publishToLaravel)({
                     tenant,
-                    article: { ...article, content: finalContent, imageUrl: null },
+                    article: { ...article, content: finalContent, imageUrl: null, author: authorName },
                     imageUrl: null,
                     publishDate: actualPublishDate,
                     timezone
@@ -161,7 +169,59 @@ async function generateAndPublish(options) {
         throw err;
     }
 }
-function generateArticleSchema(title, excerpt, keywords, publishDate, tenantName, timezone = 'Asia/Makassar') {
+function getDynamicAuthor(topicOrTitle) {
+    const text = (topicOrTitle || '').toLowerCase();
+    // 1. Water Damage
+    if (text.includes('water damage') ||
+        text.includes('water-damage') ||
+        text.includes('liquid damage') ||
+        text.includes('kemasukan air') ||
+        text.includes('terkena air') ||
+        text.includes('kena air') ||
+        text.includes('water recovery')) {
+        return 'Device Recovery Specialist, Bali Phone Repair Team';
+    }
+    // 2. iPhone / iPad
+    if (text.includes('iphone') ||
+        text.includes('ipad') ||
+        text.includes('apple watch') ||
+        text.includes('ios')) {
+        return 'iPhone Repair Specialist, Bali Phone Repair Team';
+    }
+    // 3. MacBook / Laptop
+    if (text.includes('macbook') ||
+        text.includes('laptop') ||
+        text.includes('mac mini') ||
+        text.includes('imac') ||
+        text.includes('notebook')) {
+        return 'MacBook Technician, Bali Phone Repair Team';
+    }
+    // 4. Android
+    if (text.includes('android') ||
+        text.includes('samsung') ||
+        text.includes('xiaomi') ||
+        text.includes('oppo') ||
+        text.includes('vivo') ||
+        text.includes('pixel') ||
+        text.includes('redmi') ||
+        text.includes('realme') ||
+        text.includes('huawei')) {
+        return 'Android Repair Expert, Bali Phone Repair Team';
+    }
+    // 5. Default
+    return 'Bali Phone Repair Team';
+}
+function getArticleUrl(title, tenantCmsUrl, cmsPostUrl) {
+    if (cmsPostUrl)
+        return cmsPostUrl;
+    const slug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    const base = (tenantCmsUrl || 'https://baliphonerepair.com').replace(/\/$/, '');
+    return `${base}/posts/${slug}`;
+}
+function generateArticleSchema(title, excerpt, keywords, publishDate, authorName, articleUrl, timezone = 'Asia/Makassar') {
     let dateStr = '';
     try {
         dateStr = new Intl.DateTimeFormat('en-CA', {
@@ -182,44 +242,38 @@ function generateArticleSchema(title, excerpt, keywords, publishDate, tenantName
         "headline": title,
         "description": excerpt,
         "keywords": keywords.join(', '),
+        "url": articleUrl,
         "datePublished": isoDate,
         "dateModified": isoDate,
         "author": {
-            "@type": "Organization",
-            "name": tenantName
+            "@type": "Person",
+            "name": authorName,
+            "worksFor": {
+                "@type": "Organization",
+                "name": "Bali Phone Repair"
+            }
         },
         "publisher": {
             "@type": "Organization",
-            "name": tenantName
+            "name": "Bali Phone Repair",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://baliphonerepair.com/assets/bali-phone-repair/logo-optimized.jpg"
+            }
         }
     };
     return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`;
 }
 function generateFaqSchema(contentHtml) {
     const faqItems = [];
-    // Check if there is an FAQ section (e.g. <div class="faq-section"> or after FAQ header)
-    let faqBlock = '';
-    const faqDivMatch = contentHtml.match(/<div[^>]*class=["'][^"']*faq-section[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-    if (faqDivMatch) {
-        faqBlock = faqDivMatch[1];
-    }
-    else {
-        const faqHeaderMatch = contentHtml.match(/<h[23][^>]*>(?:FAQ|Pertanyaan|Frequently Asked Questions)[\s\S]*$/i);
-        if (faqHeaderMatch) {
-            faqBlock = faqHeaderMatch[0];
-        }
-        else {
-            faqBlock = contentHtml;
-        }
-    }
-    // Parse FAQ items: <h3> followed by <p>
+    // Deteksi H3 yang diakhiri tanda tanya (?) sebagai pertanyaan, dan paragraf setelahnya sebagai jawaban
     const h3Regex = /<h3[^>]*>([\s\S]*?)<\/h3>\s*<p[^>]*>([\s\S]*?)<\/p>/gi;
     let match;
-    while ((match = h3Regex.exec(faqBlock)) !== null) {
-        const question = match[1].replace(/<[^>]+>/g, '').trim();
-        const answer = match[2].replace(/<[^>]+>/g, '').trim();
-        if (question && answer) {
-            faqItems.push({ question, answer });
+    while ((match = h3Regex.exec(contentHtml)) !== null) {
+        const rawQuestion = match[1].replace(/<[^>]+>/g, '').trim();
+        const rawAnswer = match[2].replace(/<[^>]+>/g, '').trim();
+        if (rawQuestion && rawQuestion.endsWith('?') && rawAnswer) {
+            faqItems.push({ question: rawQuestion, answer: rawAnswer });
         }
     }
     if (faqItems.length === 0)
@@ -236,7 +290,43 @@ function generateFaqSchema(contentHtml) {
             }
         }))
     };
-    return `\n<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>`;
+    return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`;
+}
+function generateLocalBusinessSchema() {
+    const schema = {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "name": "Bali Phone Repair",
+        "url": "https://baliphonerepair.com",
+        "telephone": "+6281929164999",
+        "email": "hello@baliphonerepair.com",
+        "image": "https://baliphonerepair.com/assets/bali-phone-repair/logo-optimized.jpg",
+        "description": "Professional smartphone, tablet, and laptop repair services in Bali including iPhone, MacBook, and Android device recovery with certified technicians and genuine warranty.",
+        "areaServed": [
+            "Canggu",
+            "Seminyak",
+            "Kuta",
+            "Uluwatu",
+            "Denpasar",
+            "Sanur",
+            "Ubud",
+            "Jimbaran",
+            "Nusa Dua"
+        ],
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Jl. Pulau Misol No.106, Dauh Puri Kauh",
+            "addressLocality": "Denpasar",
+            "addressRegion": "Bali",
+            "postalCode": "80113",
+            "addressCountry": "ID"
+        },
+        "openingHours": [
+            "Mo-Sa 09:00-21:00",
+            "Su 09:00-18:00"
+        ]
+    };
+    return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`;
 }
 async function generateArticle(genAI, topic, keywords, language, customPrompt = null) {
     const isEn = language === 'en';
@@ -268,6 +358,32 @@ async function generateArticle(genAI, topic, keywords, language, customPrompt = 
 - Sertakan bagian "Poin Penting" sebelum FAQ menggunakan <ul> dengan 3-5 butir ringkasan.
 - Tulis dengan gaya percakapan langsung ("Anda harus...", "perangkat Anda...")
 - Setiap bagian H2 harus mandiri dan menjawab pertanyaan secara tuntas.`;
+    const humanTouchRules = isEn ? `HUMAN TOUCH & REAL TECHNICIAN EXPERIENCE (E-E-A-T REQUIREMENT):
+At the beginning of the article, add one short paragraph (2-3 sentences) that sounds like a real technician speaking from experience. Use phrases like 'In our experience handling hundreds of devices in Bali...', 'Our technicians in Canggu frequently see this issue...', or 'After fixing this problem for tourists and expats across Bali...'. This paragraph must feel authentic and human, not generic.`
+        : `SENTUHAN MANUSIA & PENGALAMAN NYATA TEKNISI (KRUSIAL UNTUK E-E-A-T):
+Di bagian awal artikel, tambahkan satu paragraf pendek (2-3 kalimat) yang terdengar seperti teknisi asli yang berbicara dari pengalaman lapangan. Gunakan frasa seperti 'Berdasarkan pengalaman kami menangani ratusan perangkat di Bali...', 'Teknisi kami di Canggu sering menemui masalah ini...', atau 'Setelah memperbaiki masalah serupa untuk para turis dan ekspatriat di seluruh Bali...'. Paragraf ini harus terasa otentik dan manusiawi, bukan tulisan generik AI.`;
+    const internalLinkingRules = isEn ? `INTERNAL LINKING REQUIREMENT:
+At the end of the article body, before the FAQ section, add a natural paragraph that internally links to at least 2 relevant service pages using contextual anchor text.
+Example: If you need immediate help, our iPhone repair Canggu team at https://baliphonerepair.com/services/iphone-repair-bali is available same-day, or you can book a MacBook repair Bali session at https://baliphonerepair.com/services/macbook-repair-bali directly from our service page.
+Available service links you can use:
+- iPhone Repair: https://baliphonerepair.com/services/iphone-repair-bali
+- MacBook Repair: https://baliphonerepair.com/services/macbook-repair-bali
+- iPad Repair: https://baliphonerepair.com/services/ipad-repair-bali
+- Water Damage Repair: https://baliphonerepair.com/services/water-damage-repair-bali
+- Android Repair: https://baliphonerepair.com/services/android-repair-bali
+- Screen Replacement: https://baliphonerepair.com/services/screen-replacement-bali
+- Battery Replacement: https://baliphonerepair.com/services/battery-replacement-bali`
+        : `INSTRUKSI INTERNAL LINKING OTOMATIS:
+Di bagian akhir isi artikel, sebelum bagian FAQ, tambahkan satu paragraf natural yang menautkan (internal link) ke minimal 2 halaman layanan yang relevan menggunakan anchor text kontekstual.
+Contoh: Jika Anda memerlukan bantuan segera, tim servis iPhone Canggu kami di https://baliphonerepair.com/services/iphone-repair-bali siap melayani di hari yang sama, atau Anda dapat memesan sesi perbaikan MacBook Bali di https://baliphonerepair.com/services/macbook-repair-bali langsung dari halaman layanan kami.
+Tautan layanan yang dapat digunakan:
+- Servis iPhone: https://baliphonerepair.com/services/iphone-repair-bali
+- Servis MacBook: https://baliphonerepair.com/services/macbook-repair-bali
+- Servis iPad: https://baliphonerepair.com/services/ipad-repair-bali
+- Servis Water Damage: https://baliphonerepair.com/services/water-damage-repair-bali
+- Servis Android: https://baliphonerepair.com/services/android-repair-bali
+- Ganti Layar / LCD: https://baliphonerepair.com/services/screen-replacement-bali
+- Ganti Baterai: https://baliphonerepair.com/services/battery-replacement-bali`;
     let prompt = '';
     if (customPrompt) {
         if (isEn) {
@@ -280,7 +396,11 @@ CRITICAL LANGUAGE REQUIREMENT: The entire article (Title, Excerpt, H2, H3, parag
 Even if the topic or keywords provided contain foreign terms, translate and write strictly in English.
 Target keywords: ${keywords.join(', ')}
 
+${humanTouchRules}
+
 ${geoRules}
+
+${internalLinkingRules}
 
 ${strictContentRules}
 
@@ -302,7 +422,11 @@ Tulis artikel tentang: "${topic}"
 Bahasa: Bahasa Indonesia (Wajib 100% Bahasa Indonesia)
 Target keyword: ${keywords.join(', ')}
 
+${humanTouchRules}
+
 ${geoRules}
+
+${internalLinkingRules}
 
 ${strictContentRules}
 
@@ -319,13 +443,17 @@ Balas HANYA dengan format JSON valid, tanpa markdown, tanpa backtick, menggunaka
     }
     else {
         if (isEn) {
-            prompt = `You are an elite SEO & GEO (Generative Engine Optimization) expert.
+            prompt = `You are an elite SEO & GEO (Generative Engine Optimization) expert and master electronics repair technician in Bali.
 Write an in-depth article about: "${topic}"
 Language: English (MANDATORY: 100% fluent English. Title, body, headings, and FAQ must all be in English).
 Target keywords: ${keywords.join(', ')}
 Length: 1500-2500 words
 
+${humanTouchRules}
+
 ${geoRules}
+
+${internalLinkingRules}
 
 ${strictContentRules}
 
@@ -341,13 +469,17 @@ OUTPUT RULES:
 }`;
         }
         else {
-            prompt = `Anda adalah pakar SEO & GEO (Generative Engine Optimization) terkemuka.
+            prompt = `Anda adalah pakar SEO & GEO (Generative Engine Optimization) terkemuka dan teknisi servis elektronik profesional di Bali.
 Tulis artikel mendalam tentang: "${topic}"
 Bahasa: Bahasa Indonesia
 Target keywords: ${keywords.join(', ')}
 Panjang: 1500-2500 kata
 
+${humanTouchRules}
+
 ${geoRules}
+
+${internalLinkingRules}
 
 ${strictContentRules}
 
@@ -475,27 +607,26 @@ async function publishExistingArticle(articleId, customPublishDate) {
     }
     const timezone = tenant.setting?.timezone || 'Asia/Makassar';
     const actualPublishDate = customPublishDate ? new Date(customPublishDate) : new Date();
-    // Refresh Schema JSON-LD agar datePublished & dateModified mengikuti tanggal publikasi sekarang
-    let updatedContent = article.content;
-    const newArticleSchema = generateArticleSchema(article.title, article.excerpt || '', article.keywords, actualPublishDate, tenant.name, timezone);
-    const schemaRegex = /<script\s+type=["']application\/ld\+json["']>[\s\S]*?"@type":\s*"Article"[\s\S]*?<\/script>\s*/i;
-    if (schemaRegex.test(updatedContent)) {
-        updatedContent = updatedContent.replace(schemaRegex, newArticleSchema);
-    }
-    else {
-        updatedContent = `${newArticleSchema}${updatedContent}`;
-    }
+    const authorName = getDynamicAuthor(article.title);
+    const articleUrl = getArticleUrl(article.title, tenant.cmsUrl, article.cmsPostUrl);
+    // Bersihkan schema JSON-LD lama jika ada sebelum membuat ulang 3 schema baru
+    const rawBody = article.content.replace(/<script\s+type=["']application\/ld\+json["']>[\s\S]*?<\/script>\s*/gi, '');
+    const cleanContent = formatContentForCms(rawBody);
+    const newArticleSchema = generateArticleSchema(article.title, article.excerpt || '', article.keywords, actualPublishDate, authorName, articleUrl, timezone);
+    const newLocalBusinessSchema = generateLocalBusinessSchema();
+    const newFaqSchema = generateFaqSchema(cleanContent);
+    const updatedContent = `${newArticleSchema}${newLocalBusinessSchema}${cleanContent}${newFaqSchema ? `\n${newFaqSchema}` : ''}`;
     let cmsPostId = null;
     let cmsPostUrl = null;
-    const cleanContent = formatContentForCms(updatedContent);
     if (tenant.cmsType === 'WORDPRESS') {
         const result = await (0, wordpress_1.publishToWordPress)({
             tenant: { cmsUrl: tenant.cmsUrl, cmsApiKey: tenant.cmsApiKey },
             article: {
                 title: article.title,
-                content: cleanContent,
+                content: updatedContent,
                 excerpt: article.excerpt || '',
                 keywords: article.keywords,
+                author: authorName,
                 imageUrl: null
             },
             imageUrl: null,
@@ -509,9 +640,10 @@ async function publishExistingArticle(articleId, customPublishDate) {
             tenant: { cmsUrl: tenant.cmsUrl, cmsApiKey: tenant.cmsApiKey },
             article: {
                 title: article.title,
-                content: cleanContent,
+                content: updatedContent,
                 excerpt: article.excerpt || '',
                 keywords: article.keywords,
+                author: authorName,
                 imageUrl: null
             },
             imageUrl: null,
@@ -524,7 +656,7 @@ async function publishExistingArticle(articleId, customPublishDate) {
     else if (tenant.cmsType === 'BLOGGER') {
         const result = await (0, blogger_1.publishToBlogger)({
             tenant: tenant,
-            article: { ...article, content: cleanContent },
+            article: { ...article, content: updatedContent, author: authorName },
             imageUrl: null
         });
         cmsPostId = result.id;

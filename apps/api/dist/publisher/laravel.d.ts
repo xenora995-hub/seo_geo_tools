@@ -9,6 +9,7 @@ interface PublishOptions {
         excerpt: string;
         keywords: string[];
         imageUrl?: string | null;
+        author?: string;
     };
     imageUrl?: string | null;
     publishDate?: string | Date | null;
