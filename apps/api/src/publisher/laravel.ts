@@ -56,12 +56,30 @@ export async function publishToLaravel(options: PublishOptions) {
   let finalContent = article.content
   const publishedAt = formatPublishDateTo0800(publishDate, timezone)
 
+  // Pastikan keywords tidak melebihi batas VARCHAR(255) database MySQL klien saat di-implode
+  let safeKeywords: string[] = []
+  if (Array.isArray(article.keywords)) {
+    let currentLength = 0
+    for (const rawKw of article.keywords) {
+      const kw = String(rawKw).trim()
+      if (!kw) continue
+      if (currentLength + kw.length + (safeKeywords.length > 0 ? 2 : 0) > 240) {
+        if (safeKeywords.length === 0) {
+          safeKeywords.push(kw.slice(0, 240))
+        }
+        break
+      }
+      safeKeywords.push(kw)
+      currentLength += kw.length + (safeKeywords.length > 1 ? 2 : 0)
+    }
+  }
+
   const res = await axios.post(`${base}/api/seo/posts`, {
     title: article.title,
     content: finalContent,
-    excerpt: article.excerpt,
+    excerpt: article.excerpt ? article.excerpt.slice(0, 490) : '',
     image_url: article.imageUrl || null,
-    keywords: article.keywords,
+    keywords: safeKeywords,
     author: article.author || 'Bali Phone Repair Team',
     status: 'published',
     published_at: publishedAt,
