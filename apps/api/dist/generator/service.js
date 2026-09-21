@@ -358,10 +358,35 @@ async function generateArticle(genAI, topic, keywords, language, customPrompt = 
 - Sertakan bagian "Poin Penting" sebelum FAQ menggunakan <ul> dengan 3-5 butir ringkasan.
 - Tulis dengan gaya percakapan langsung ("Anda harus...", "perangkat Anda...")
 - Setiap bagian H2 harus mandiri dan menjawab pertanyaan secara tuntas.`;
-    const humanTouchRules = isEn ? `HUMAN TOUCH & REAL TECHNICIAN EXPERIENCE (E-E-A-T REQUIREMENT):
-At the beginning of the article, add one short paragraph (2-3 sentences) that sounds like a real technician speaking from experience. Use phrases like 'In our experience handling hundreds of devices in Bali...', 'Our technicians in Canggu frequently see this issue...', or 'After fixing this problem for tourists and expats across Bali...'. This paragraph must feel authentic and human, not generic.`
-        : `SENTUHAN MANUSIA & PENGALAMAN NYATA TEKNISI (KRUSIAL UNTUK E-E-A-T):
-Di bagian awal artikel, tambahkan satu paragraf pendek (2-3 kalimat) yang terdengar seperti teknisi asli yang berbicara dari pengalaman lapangan. Gunakan frasa seperti 'Berdasarkan pengalaman kami menangani ratusan perangkat di Bali...', 'Teknisi kami di Canggu sering menemui masalah ini...', atau 'Setelah memperbaiki masalah serupa untuk para turis dan ekspatriat di seluruh Bali...'. Paragraf ini harus terasa otentik dan manusiawi, bukan tulisan generik AI.`;
+    const humanTouchRules = isEn ? `HUMAN TOUCH, NATURAL CADENCE & ANTI-AI DETECTION (E-E-A-T ESSENTIAL):
+Google and modern AI search engines actively penalize formulaic AI text. To guarantee this article reads 100% human-crafted:
+1. NATURAL WRITING BURSTINESS & RHYTHM:
+   - Vary sentence lengths dramatically. Write punchy short sentences (3-6 words), followed by natural conversational explanations. Never write three sentences of identical structure in a row.
+   - Use natural contractions ("don't", "can't", "you'll", "we've", "it's"). Real humans write conversationally, not like academic robots.
+2. STRICTLY FORBIDDEN AI JARGON & CLICHÉS:
+   - NEVER use words or phrases like: "delve", "tapestry", "crucial", "paramount", "furthermore", "moreover", "in conclusion", "it is worth noting", "beacon", "game-changer", "revolutionize", "testament to", "in today's digital landscape", "navigate the complexities".
+   - Replace generic transitions with natural phrases ("Here is what actually happens...", "The catch is...", "In plain terms...", "Honestly,...").
+3. FIRST-HAND BENCH TECHNICIAN OBSERVATIONS:
+   - Early in the article and throughout key sections, weave in authentic workbench details from Bali repair shops:
+     * Real physical symptoms (the distinct burnt smell of a shorted capacitor, green copper oxidation blooming around display flex cables under the microscope, gritty volcanic sand packed tight inside lightning ports, lithium battery pouches puffed up like small pillows).
+     * Local Bali realities (85%+ tropical humidity in the rainy season, scooter vibration rattling optical image stabilization, sudden tropical downpours soaking backpacks, voltage drops in rented villas).
+   - Use genuine technician voice ("In our workshop, when a customer walks in with...", "We always test this with a USB-C ammeter first before opening the screws...", "Our rule of thumb on the repair bench is...").
+4. EMPATHETIC, CANDID ADVICE:
+   - Speak candidly like a trusted veteran technician. Give practical, unfiltered advice (including common mistakes like putting wet phones in rice, and why it actually accelerates corrosion).`
+        : `SENTUHAN MANUSIA, RITME ALAMI & ANTI-DETEKSI AI (PENTING UNTUK E-E-A-T):
+Google dan mesin pencari AI mendeteksi dan menurunkan peringkat teks AI yang kaku. Pastikan tulisan ini 100% terasa seperti ditulis langsung oleh teknisi manusia:
+1. VARIASI PANJANG KALIMAT (BURSTINESS):
+   - Gunakan kombinasi kalimat pendek (3-6 kata) yang tegas, diselingi kalimat penjelas yang mengalir santai. Hindari membuat 3 kalimat berurutan dengan panjang yang sama.
+   - Gunakan gaya bahasa luwes, wajar, dan komunikatif layaknya praktisi lapangan.
+2. KATA KLISE AI YANG DILARANG KERAS:
+   - JANGAN PERNAH gunakan kata klise AI seperti: "dalam era digital ini", "penting untuk dicatat", "lebih lanjut", "selain itu", "merupakan bukti dari", "titik balik", "mengarungi", "menyelami", "secara esensial", "sebagai kesimpulan".
+   - Gunakan transisi alami ("Yang sering terjadi di lapangan adalah...", "Masalah sebenarnya ada di...", "Jujur saja,...").
+3. PENGALAMAN RIIL DI MEJA KERJA TEKNISI:
+   - Ceritakan detail fisik nyata yang hanya diketahui teknisi lapangan: bau khas komponen korslet, serbuk pasir hitam pantai yang menyumbat port charger, korosi kehijauan akibat kelembapan tinggi Bali saat musim hujan, atau baterai kembung akibat suhu panas tropis.
+   - Singgung kondisi nyata di Bali (getaran stang motor matic yang melonggarkan kabel fleksibel layar, tegangan listrik villa yang naik-turun, kehujanan di jalan).
+   - Gunakan sudut pandang teknisi ("Di meja servis kami...", "Langkah pertama kami biasanya cek arus dengan ammeter...", "Pengalaman kami menangani turis dan ekspatriat di Canggu...").
+4. SARAN JUJUR & EMPATIS:
+   - Berikan tips praktis tanpa berbelit-belit, jelaskan mitos yang salah (seperti merendam HP di beras) dan solusi tepatnya.`;
     const internalLinkingRules = isEn ? `INTERNAL LINKING REQUIREMENT:
 At the end of the article body, before the FAQ section, add a natural paragraph that internally links to at least 2 relevant service pages using contextual anchor text.
 Example: If you need immediate help, our iPhone repair Canggu team at https://baliphonerepair.com/services/iphone-repair-bali is available same-day, or you can book a MacBook repair Bali session at https://baliphonerepair.com/services/macbook-repair-bali directly from our service page.

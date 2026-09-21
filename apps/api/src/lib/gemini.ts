@@ -1,22 +1,32 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const GEMINI_MODELS = [
-  'gemini-3.5-flash',
-  'gemini-flash-lite-latest',
   'gemini-flash-latest',
+  'gemini-flash-lite-latest',
   'gemini-2.5-flash',
+  'gemini-3.5-flash',
 ]
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout setelah ${ms / 1000} detik`)), ms)
+    ),
+  ])
+}
 
 /**
  * Generate content with automatic model fallback for maximum resilience
- * against 429 Quota Exceeded and 503 temporary service spikes.
+ * against 429 Quota Exceeded, timeouts, and 503 temporary service spikes.
  */
 export async function generateWithFallback(
   genAI: GoogleGenerativeAI,
   prompt: string,
-  options?: { jsonMode?: boolean }
+  options?: { jsonMode?: boolean; timeoutMs?: number }
 ): Promise<string> {
   let lastError: any = null
+  const timeoutMs = options?.timeoutMs || 25000
 
   for (const modelName of GEMINI_MODELS) {
     try {
@@ -27,7 +37,7 @@ export async function generateWithFallback(
           : undefined,
       })
 
-      const result = await model.generateContent(prompt)
+      const result = await withTimeout(model.generateContent(prompt), timeoutMs)
       const text = result.response.text()
       if (text) {
         console.log(`[GEMINI] Sukses generate menggunakan model: ${modelName}`)

@@ -2,17 +2,24 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateWithFallback = generateWithFallback;
 const GEMINI_MODELS = [
-    'gemini-3.5-flash',
-    'gemini-flash-lite-latest',
     'gemini-flash-latest',
+    'gemini-flash-lite-latest',
     'gemini-2.5-flash',
+    'gemini-3.5-flash',
 ];
+function withTimeout(promise, ms) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout setelah ${ms / 1000} detik`)), ms)),
+    ]);
+}
 /**
  * Generate content with automatic model fallback for maximum resilience
- * against 429 Quota Exceeded and 503 temporary service spikes.
+ * against 429 Quota Exceeded, timeouts, and 503 temporary service spikes.
  */
 async function generateWithFallback(genAI, prompt, options) {
     let lastError = null;
+    const timeoutMs = options?.timeoutMs || 25000;
     for (const modelName of GEMINI_MODELS) {
         try {
             const model = genAI.getGenerativeModel({
@@ -21,7 +28,7 @@ async function generateWithFallback(genAI, prompt, options) {
                     ? { responseMimeType: 'application/json' }
                     : undefined,
             });
-            const result = await model.generateContent(prompt);
+            const result = await withTimeout(model.generateContent(prompt), timeoutMs);
             const text = result.response.text();
             if (text) {
                 console.log(`[GEMINI] Sukses generate menggunakan model: ${modelName}`);
