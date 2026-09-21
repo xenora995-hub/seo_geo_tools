@@ -24,7 +24,8 @@ $target_url = "http://127.0.0.1:{$node_port}" . $request_uri;
 
 // Helper untuk mencoba membangunkan backend seogeo-api jika environment PHP mengizinkan
 function safe_wake_backend() {
-    $cmd = "bash -c 'source ~/.bashrc 2>/dev/null; cd ~/seo-geo-tools/apps/api && (pm2 resurrect 2>/dev/null || pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api 2>/dev/null || nohup node dist/index.js > seogeo-api.log 2>&1 &)' > /dev/null 2>&1 &";
+    $home = $_SERVER['HOME'] ?? (getenv('HOME') ?: '/home/' . (get_current_user() ?: ''));
+    $cmd = "bash -c 'export HOME={$home}; [ -s \"\$HOME/.nvm/nvm.sh\" ] && . \"\$HOME/.nvm/nvm.sh\"; export PATH=\"\$PATH:\$HOME/.nvm/versions/node/$(ls \$HOME/.nvm/versions/node 2>/dev/null | tail -n 1)/bin:\$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin\"; if [ -f \"\$HOME/seo-geo-tools/keep-alive.sh\" ]; then bash \"\$HOME/seo-geo-tools/keep-alive.sh\" > /dev/null 2>&1 & else cd \"\$HOME/seo-geo-tools/apps/api\" 2>/dev/null && (pm2 resurrect 2>/dev/null || pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api 2>/dev/null || nohup node dist/index.js > seogeo-api.log 2>&1 &); fi' > /dev/null 2>&1 &";
 
     if (function_exists('exec')) {
         @exec($cmd);
@@ -103,7 +104,7 @@ $res = forward_request($target_url, $method, $headers, $body);
 // 2. Jika gagal koneksi (port 4000 belum menyala), coba bangunkan backend jika diizinkan server
 if ($res['err']) {
     if (safe_wake_backend()) {
-        sleep(2); // beri waktu proses Node/PM2 hidup
+        sleep(3); // beri waktu proses Node/PM2 hidup
         $res = forward_request($target_url, $method, $headers, $body);
     }
 }
