@@ -114,6 +114,7 @@ export async function generateAndPublish(options: GenerateOptions) {
       keywords: articleData.suggestedKeywords,
       imagePrompt: articleData.imagePrompt,
       status: 'PENDING',
+      createdAt: actualPublishDate,
     }
   })
 
@@ -157,7 +158,7 @@ export async function generateAndPublish(options: GenerateOptions) {
       // 5. Update status menjadi PUBLISHED jika sukses
       await prisma.article.update({
         where: { id: article.id },
-        data: { status: 'PUBLISHED', publishedAt: actualPublishDate, cmsPostId, cmsPostUrl }
+        data: { status: 'PUBLISHED', publishedAt: actualPublishDate, createdAt: actualPublishDate, cmsPostId, cmsPostUrl }
       })
 
       console.log(`[GENERATOR] ✅ Artikel berhasil dipublikasi ke CMS: ${cmsPostUrl}`)

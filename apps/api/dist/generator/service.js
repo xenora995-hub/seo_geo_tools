@@ -90,6 +90,7 @@ async function generateAndPublish(options) {
             keywords: articleData.suggestedKeywords,
             imagePrompt: articleData.imagePrompt,
             status: 'PENDING',
+            createdAt: actualPublishDate,
         }
     });
     try {
@@ -131,7 +132,7 @@ async function generateAndPublish(options) {
             // 5. Update status menjadi PUBLISHED jika sukses
             await prisma_1.prisma.article.update({
                 where: { id: article.id },
-                data: { status: 'PUBLISHED', publishedAt: actualPublishDate, cmsPostId, cmsPostUrl }
+                data: { status: 'PUBLISHED', publishedAt: actualPublishDate, createdAt: actualPublishDate, cmsPostId, cmsPostUrl }
             });
             console.log(`[GENERATOR] ✅ Artikel berhasil dipublikasi ke CMS: ${cmsPostUrl}`);
             // 6. Flash Indexing API (Opsional)
