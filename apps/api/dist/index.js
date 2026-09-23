@@ -77,9 +77,28 @@ app.use((err, _req, res, _next) => {
         message: err.message || 'Terjadi kesalahan server',
     });
 });
+// Crash Prevention Shield
+process.on('uncaughtException', (err) => {
+    console.error('[UNCAUGHT EXCEPTION SHIELD]', err?.message || err);
+    if (err?.stack)
+        console.error(err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[UNHANDLED REJECTION SHIELD]', reason?.message || reason);
+});
 app.listen(PORT, () => {
     console.log(`✅ API berjalan di port ${PORT}`);
-    (0, cron_1.initScheduler)();
-    (0, bot_1.initTelegramBots)();
+    try {
+        (0, cron_1.initScheduler)().catch((e) => console.error('[SCHEDULER INIT ERROR]', e));
+    }
+    catch (e) {
+        console.error('[SCHEDULER INIT ERROR]', e);
+    }
+    try {
+        (0, bot_1.initTelegramBots)().catch((e) => console.error('[TELEGRAM INIT ERROR]', e));
+    }
+    catch (e) {
+        console.error('[TELEGRAM INIT ERROR]', e);
+    }
 });
 //# sourceMappingURL=index.js.map

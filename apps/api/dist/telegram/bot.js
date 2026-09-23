@@ -141,8 +141,13 @@ function startBotForTenant(tenantId, token, expectedChatId) {
             return ctx.reply(`❌ Terjadi kesalahan saat menyimpan: ${err.message}`);
         }
     });
-    bot.launch();
+    bot.catch((err) => {
+        console.error(`[TELEGRAM] Bot error for tenant ${tenantId}:`, err?.message || err);
+    });
+    bot.launch().catch((err) => {
+        console.warn(`[TELEGRAM] Tidak dapat menjalankan polling bot untuk tenant ${tenantId} (${err?.message || err}). Mengabaikan agar backend tetap hidup.`);
+    });
     activeBots[tenantId] = bot;
-    console.log(`[TELEGRAM] Bot berjalan untuk tenant: ${tenantId}`);
+    console.log(`[TELEGRAM] Bot didaftarkan untuk tenant: ${tenantId}`);
 }
 //# sourceMappingURL=bot.js.map

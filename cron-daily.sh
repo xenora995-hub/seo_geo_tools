@@ -38,15 +38,9 @@ else
     "$NODE_BIN" dist/scheduler/standalone-runner.js
 fi
 
-# 2. Opsional: Jika PM2 terpasang, pastikan seogeo-api tetap hidup untuk melayani dashboard web
-if command -v pm2 >/dev/null 2>&1; then
-    HEALTH=$(curl -s -m 2 http://127.0.0.1:4000/health 2>/dev/null)
-    if [[ ! "$HEALTH" =~ "ok" ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Membangunkan dashboard API di port 4000 via PM2..."
-        pm2 resurrect >/dev/null 2>&1 || pm2 restart seogeo-api >/dev/null 2>&1 || pm2 start dist/index.js --name seogeo-api >/dev/null 2>&1
-        pm2 save >/dev/null 2>&1
-    fi
-fi
+# 2. Pastikan service seogeo-api tetap hidup untuk melayani dashboard web
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Memeriksa status service dashboard..."
+bash "$SCRIPT_DIR/keep-alive.sh"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Selesai."
 

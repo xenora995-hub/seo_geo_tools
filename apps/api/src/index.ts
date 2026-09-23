@@ -79,8 +79,26 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   })
 })
 
+// Crash Prevention Shield
+process.on('uncaughtException', (err: any) => {
+  console.error('[UNCAUGHT EXCEPTION SHIELD]', err?.message || err)
+  if (err?.stack) console.error(err.stack)
+})
+
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[UNHANDLED REJECTION SHIELD]', reason?.message || reason)
+})
+
 app.listen(PORT, () => {
   console.log(`✅ API berjalan di port ${PORT}`)
-  initScheduler()
-  initTelegramBots()
+  try {
+    initScheduler().catch((e) => console.error('[SCHEDULER INIT ERROR]', e))
+  } catch (e) {
+    console.error('[SCHEDULER INIT ERROR]', e)
+  }
+  try {
+    initTelegramBots().catch((e) => console.error('[TELEGRAM INIT ERROR]', e))
+  } catch (e) {
+    console.error('[TELEGRAM INIT ERROR]', e)
+  }
 })

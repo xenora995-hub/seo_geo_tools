@@ -36,28 +36,30 @@ Jalankan perintah berikut di terminal SSH Hostinger Anda (cukup copy-paste 1 blo
 ```bash
 cd ~/seo-geo-tools
 git pull origin main
-chmod +x cron-daily.sh keep-alive.sh
+chmod +x cron-daily.sh keep-alive.sh deploy-hostinger.sh
 
 # Salin api-bridge.php terbaru ke public_html agar web & web-cron aktif
 find ~ -name "api-bridge.php" -path "*/public_html/*" -exec cp ~/seo-geo-tools/apps/dashboard/public/api-bridge.php {} \;
 
-# Restart service dashboard via PM2
-cd apps/api
-pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api
-pm2 save
+# Jalankan keep-alive untuk memastikan backend langsung aktif
+bash ~/seo-geo-tools/keep-alive.sh
 ```
 
 ---
 
-## 4. Pengaturan Cron di hPanel Hostinger
-
-⚠️ **PENTING: Server Hostinger Beroperasi Menggunakan Zona Waktu UTC (Bukan WITA/WIB)**:
-- Jam `08:00 WITA` (Bali/Makassar / UTC+8) adalah sama dengan jam **`00:00 UTC`** (Tengah Malam Server).
-- Jika Anda memasang jam `8` di hPanel, server baru akan mengeksekusi pada jam **`16:00 WITA` (4 sore)**!
+## 4. Pengaturan Cron di hPanel Hostinger (KUNCI AGAR TIDAK PERNAH OFFLINE)
 
 Buka **hPanel Hostinger** -> Menu **Tingkat Lanjut (Advanced)** -> **Cron Jobs** -> Pilih **Kustom (Custom)**:
 
-### Cron Pemicu Artikel Harian (WAJIB)
+### A. Cron Keep-Alive Port 4000 (WAJIB: Agar Dashboard Selalu Aktif & Anti-502)
+Karena Hostinger secara berkala mematikan proses background/PM2 saat server idle atau maintenance, Cron ini bertugas mengecek port 4000 setiap 1-2 menit dan langsung menghidupkannya otomatis jika mati:
+- **Perintah (Command)**:
+  ```bash
+  bash ~/seo-geo-tools/keep-alive.sh > /dev/null 2>&1
+  ```
+- **Waktu**: Pilih **Setiap Menit** (`* * * * *`) atau **Setiap 2 Menit** (`*/2 * * * *`)
+
+### B. Cron Pemicu Artikel Harian (WAJIB)
 - **Perintah (Command)**:
   ```bash
   bash ~/seo-geo-tools/cron-daily.sh > ~/seo-geo-tools/cron-daily.log 2>&1

@@ -1,1 +1,1 @@
-{"version":3,"file":"bot.d.ts","sourceRoot":"","sources":["../../src/telegram/bot.ts"],"names":[],"mappings":"AAQA,wBAAsB,gBAAgB,kBAmBrC;AAED,wBAAgB,iBAAiB,CAAC,QAAQ,EAAE,MAAM,EAAE,KAAK,EAAE,MAAM,EAAE,cAAc,EAAE,MAAM,GAAG,IAAI,QAyH/F"}
+{"version":3,"file":"bot.d.ts","sourceRoot":"","sources":["../../src/telegram/bot.ts"],"names":[],"mappings":"AAQA,wBAAsB,gBAAgB,kBAmBrC;AAED,wBAAgB,iBAAiB,CAAC,QAAQ,EAAE,MAAM,EAAE,KAAK,EAAE,MAAM,EAAE,cAAc,EAAE,MAAM,GAAG,IAAI,QA+H/F"}

@@ -50,11 +50,9 @@ chmod 755 "$CHOSEN_DIR"
 find "$CHOSEN_DIR" -type d -exec chmod 755 {} \;
 find "$CHOSEN_DIR" -type f -exec chmod 644 {} \;
 
-# Restart backend service via PM2
+# Restart backend service via keep-alive.sh
 echo "🔄 Memastikan backend seogeo-api aktif..."
-cd "$SCRIPT_DIR/apps/api"
-(pm2 restart seogeo-api 2>/dev/null || pm2 start dist/index.js --name seogeo-api)
-pm2 save
+bash "$SCRIPT_DIR/keep-alive.sh"
 
 echo ""
 echo "=========================================================="
