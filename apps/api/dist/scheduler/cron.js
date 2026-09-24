@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initScheduler = initScheduler;
+exports.checkMissedSchedules = checkMissedSchedules;
 exports.getDateStringInTimezone = getDateStringInTimezone;
 exports.runScheduleJob = runScheduleJob;
 exports.registerCron = registerCron;
@@ -41,7 +42,67 @@ async function initScheduler() {
             await (0, telegram_1.sendWeeklyReport)(tenant.id).catch(console.error);
         }
     });
+    // Catch-up check: 20 detik setelah booting untuk memeriksa jika ada jadwal yang terlewat karena downtime
+    setTimeout(async () => {
+        await checkMissedSchedules().catch(console.error);
+    }, 20000);
+    // Polling pemulihan berkala (menit 15 dan 45 setiap jam) untuk menangkal sleep/downtime Hostinger
+    node_cron_1.default.schedule('15,45 * * * *', async () => {
+        await checkMissedSchedules().catch(console.error);
+    });
     console.log(`[SCHEDULER] ✅ ${schedules.length} jadwal aktif dimuat`);
+}
+async function checkMissedSchedules() {
+    console.log('[SCHEDULER] 🔍 Memeriksa jadwal yang terlewat hari ini...');
+    const schedules = await prisma_1.prisma.schedule.findMany({
+        where: { isActive: true },
+        include: { tenant: { include: { setting: true } } }
+    });
+    for (const schedule of schedules) {
+        if (!schedule.tenant.isActive)
+            continue;
+        const timezone = schedule.tenant.setting?.timezone || 'Asia/Makassar';
+        const now = new Date();
+        const todayStr = getDateStringInTimezone(now, timezone);
+        // Cek apakah sudah berjalan hari ini
+        if (schedule.lastRun) {
+            const lastRunStr = getDateStringInTimezone(schedule.lastRun, timezone);
+            if (lastRunStr === todayStr)
+                continue;
+        }
+        // Cek rentang tanggal jadwal
+        if (schedule.startDate) {
+            const startStr = getDateStringInTimezone(schedule.startDate, timezone);
+            if (todayStr < startStr)
+                continue;
+        }
+        if (schedule.endDate) {
+            const endStr = getDateStringInTimezone(schedule.endDate, timezone);
+            if (todayStr > endStr)
+                continue;
+        }
+        // Periksa apakah waktu jadwal telah terlewati hari ini
+        const parts = schedule.cronExpr.trim().split(/\s+/);
+        if (parts.length >= 2) {
+            const targetMin = parseInt(parts[0], 10);
+            const targetHour = parseInt(parts[1], 10);
+            if (!isNaN(targetHour) && !isNaN(targetMin)) {
+                const timeFormatter = new Intl.DateTimeFormat('en-US', {
+                    timeZone: timezone,
+                    hour: 'numeric',
+                    minute: 'numeric',
+                    hour12: false
+                });
+                const timeParts = timeFormatter.formatToParts(now);
+                const currentHour = parseInt(timeParts.find(p => p.type === 'hour')?.value || '0', 10);
+                const currentMin = parseInt(timeParts.find(p => p.type === 'minute')?.value || '0', 10);
+                if (currentHour > targetHour || (currentHour === targetHour && currentMin >= targetMin)) {
+                    console.log(`[SCHEDULER] ⚡ Mendeteksi jadwal terlewat hari ini: "${schedule.name}" (${schedule.tenant.name}). Mengeksekusi catch-up sekarang...`);
+                    await runScheduleJob(schedule.id).catch(err => console.error(`[SCHEDULER] Gagal eksekusi catch-up ${schedule.name}:`, err));
+                }
+            }
+        }
+    }
 }
 function getDateStringInTimezone(d, tz = 'Asia/Jakarta') {
     try {

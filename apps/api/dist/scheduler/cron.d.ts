@@ -1,4 +1,5 @@
 export declare function initScheduler(): Promise<void>;
+export declare function checkMissedSchedules(): Promise<void>;
 export declare function getDateStringInTimezone(d: Date, tz?: string): string;
 export declare function runScheduleJob(scheduleId: string, options?: {
     force?: boolean;
