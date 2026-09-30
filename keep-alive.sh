@@ -35,12 +35,22 @@ fi
 LATEST_NVM_NODE="$(ls -d $HOME/.nvm/versions/node/v* 2>/dev/null | tail -n 1)/bin"
 export PATH="$LATEST_NVM_NODE:$HOME/.npm-global/bin:$HOME/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-# 1. Cek apakah backend API di port 4000 merespons
-HEALTH_CHECK=$(curl -s -m 3 http://127.0.0.1:4000/health 2>/dev/null)
+# 1. Cek apakah backend API merespons via Unix Socket atau HTTP
+HEALTH_CHECK=""
+if [ -S "$API_DIR/api.sock" ]; then
+    HEALTH_CHECK=$(curl -s -m 3 --unix-socket "$API_DIR/api.sock" http://localhost/health 2>/dev/null)
+fi
+if [[ ! "$HEALTH_CHECK" =~ "ok" ]]; then
+    HEALTH_CHECK=$(curl -s -m 3 http://127.0.0.1:4000/health 2>/dev/null)
+fi
+if [[ ! "$HEALTH_CHECK" =~ "ok" ]]; then
+    HEALTH_CHECK=$(curl -s -m 3 https://seo.baliphonerepair.com/api/health 2>/dev/null)
+fi
 
 if [[ "$HEALTH_CHECK" =~ "ok" ]]; then
     exit 0
 fi
+
 
 # 2. Jika backend mati atau tidak merespons, hidupkan ulang
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
