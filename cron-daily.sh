@@ -24,18 +24,19 @@ NODE_BIN=$(command -v node 2>/dev/null || ls $HOME/.nvm/versions/node/*/bin/node
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Memulai pemicu artikel harian..."
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Menggunakan Node: $NODE_BIN"
 
-# 1. Eksekusi generator artikel secara langsung melalui Standalone Runner
-cd "$API_DIR" || exit 1
+# 1. Eksekusi runner melalui API internal (zero-thread-overhead via Unix Socket / HTTP)
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Memicu artikel via API Runner..."
+CRON_RESP=$(curl -s -m 180 --unix-socket "$API_DIR/api.sock" "http://localhost/api/schedules/runner?secret=seogeo-cron-token-secret" 2>/dev/null || curl -s -m 180 "https://seo.baliphonerepair.com/api/schedules/runner?secret=seogeo-cron-token-secret" 2>/dev/null)
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Respons API Runner: $CRON_RESP"
 
-if [ -f "dist/scheduler/standalone-runner.js" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Menjalankan standalone-runner.js..."
-    "$NODE_BIN" dist/scheduler/standalone-runner.js
-    STATUS=$?
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Standalone runner selesai dengan status exit: $STATUS"
-else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] ⚠️ dist/scheduler/standalone-runner.js tidak ditemukan! Membangun ulang..."
-    npm run build
-    "$NODE_BIN" dist/scheduler/standalone-runner.js
+if [[ "$CRON_RESP" != *"\"success\":true"* ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] API Runner tidak merespons, fallback ke standalone-runner.js..."
+    cd "$API_DIR" || exit 1
+    if [ -f "dist/scheduler/standalone-runner.js" ]; then
+        "$NODE_BIN" dist/scheduler/standalone-runner.js
+        STATUS=$?
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Standalone runner selesai: $STATUS"
+    fi
 fi
 
 # 2. Pastikan service seogeo-api tetap hidup untuk melayani dashboard web
@@ -43,4 +44,5 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Memeriksa status service dashb
 bash "$SCRIPT_DIR/keep-alive.sh"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CRON-DAILY] Selesai."
+
 
