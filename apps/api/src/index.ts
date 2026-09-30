@@ -93,7 +93,7 @@ process.on('unhandledRejection', (reason: any) => {
   console.error('[UNHANDLED REJECTION SHIELD]', reason?.message || reason)
 })
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`✅ API berjalan di port ${PORT}`)
   try {
     initScheduler().catch((e) => console.error('[SCHEDULER INIT ERROR]', e))

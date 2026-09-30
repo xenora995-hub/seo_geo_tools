@@ -90,7 +90,7 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
     console.error('[UNHANDLED REJECTION SHIELD]', reason?.message || reason);
 });
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`✅ API berjalan di port ${PORT}`);
     try {
         (0, cron_1.initScheduler)().catch((e) => console.error('[SCHEDULER INIT ERROR]', e));
