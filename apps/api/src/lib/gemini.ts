@@ -1,10 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const GEMINI_MODELS = [
-  'gemini-flash-latest',
-  'gemini-flash-lite-latest',
-  'gemini-2.5-flash',
-  'gemini-3.5-flash',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-8b',
+  'gemini-1.5-pro',
 ]
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -26,7 +26,7 @@ export async function generateWithFallback(
   options?: { jsonMode?: boolean; timeoutMs?: number }
 ): Promise<string> {
   let lastError: any = null
-  const timeoutMs = options?.timeoutMs || 25000
+  const timeoutMs = options?.timeoutMs || 60000
 
   for (const modelName of GEMINI_MODELS) {
     try {

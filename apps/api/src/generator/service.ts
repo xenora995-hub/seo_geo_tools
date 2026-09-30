@@ -442,8 +442,7 @@ export function generateLocalBusinessSchema(tenant?: any): string {
         "addressCountry": "ID"
       },
       "openingHours": [
-        "Mo-Sa 09:00-21:00",
-        "Su 09:00-18:00"
+        "Mo-Su 09:00-21:00"
       ]
     }
     return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`
