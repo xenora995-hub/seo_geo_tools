@@ -83,6 +83,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   })
 })
 
+import fs from 'fs'
+import path from 'path'
+
 // Crash Prevention Shield
 process.on('uncaughtException', (err: any) => {
   console.error('[UNCAUGHT EXCEPTION SHIELD]', err?.message || err)
@@ -92,6 +95,8 @@ process.on('uncaughtException', (err: any) => {
 process.on('unhandledRejection', (reason: any) => {
   console.error('[UNHANDLED REJECTION SHIELD]', reason?.message || reason)
 })
+
+const SOCKET_PATH = process.env.UNIX_SOCKET_PATH || (process.platform === 'linux' ? path.resolve(__dirname, '../api.sock') : null)
 
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`✅ API berjalan di port ${PORT}`)
@@ -106,3 +111,26 @@ app.listen(Number(PORT), '0.0.0.0', () => {
     console.error('[TELEGRAM INIT ERROR]', e)
   }
 })
+
+if (SOCKET_PATH) {
+  try {
+    if (fs.existsSync(SOCKET_PATH)) {
+      try { fs.unlinkSync(SOCKET_PATH) } catch {}
+    }
+    app.listen(SOCKET_PATH, () => {
+      try { fs.chmodSync(SOCKET_PATH, 0o777) } catch {}
+      console.log(`✅ API berjalan via Unix Domain Socket di ${SOCKET_PATH}`)
+    })
+
+    const cleanup = () => {
+      try {
+        if (fs.existsSync(SOCKET_PATH)) fs.unlinkSync(SOCKET_PATH)
+      } catch {}
+    }
+    process.on('exit', cleanup)
+    process.on('SIGINT', () => { cleanup(); process.exit(0) })
+    process.on('SIGTERM', () => { cleanup(); process.exit(0) })
+  } catch (err) {
+    console.error('[SOCKET ERROR]', err)
+  }
+}

@@ -81,6 +81,8 @@ app.use((err, _req, res, _next) => {
         message: err.message || 'Terjadi kesalahan server',
     });
 });
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 // Crash Prevention Shield
 process.on('uncaughtException', (err) => {
     console.error('[UNCAUGHT EXCEPTION SHIELD]', err?.message || err);
@@ -90,6 +92,7 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
     console.error('[UNHANDLED REJECTION SHIELD]', reason?.message || reason);
 });
+const SOCKET_PATH = process.env.UNIX_SOCKET_PATH || (process.platform === 'linux' ? path_1.default.resolve(__dirname, '../api.sock') : null);
 app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`✅ API berjalan di port ${PORT}`);
     try {
@@ -105,4 +108,34 @@ app.listen(Number(PORT), '0.0.0.0', () => {
         console.error('[TELEGRAM INIT ERROR]', e);
     }
 });
+if (SOCKET_PATH) {
+    try {
+        if (fs_1.default.existsSync(SOCKET_PATH)) {
+            try {
+                fs_1.default.unlinkSync(SOCKET_PATH);
+            }
+            catch { }
+        }
+        app.listen(SOCKET_PATH, () => {
+            try {
+                fs_1.default.chmodSync(SOCKET_PATH, 0o777);
+            }
+            catch { }
+            console.log(`✅ API berjalan via Unix Domain Socket di ${SOCKET_PATH}`);
+        });
+        const cleanup = () => {
+            try {
+                if (fs_1.default.existsSync(SOCKET_PATH))
+                    fs_1.default.unlinkSync(SOCKET_PATH);
+            }
+            catch { }
+        };
+        process.on('exit', cleanup);
+        process.on('SIGINT', () => { cleanup(); process.exit(0); });
+        process.on('SIGTERM', () => { cleanup(); process.exit(0); });
+    }
+    catch (err) {
+        console.error('[SOCKET ERROR]', err);
+    }
+}
 //# sourceMappingURL=index.js.map

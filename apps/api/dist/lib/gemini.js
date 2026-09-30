@@ -2,10 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateWithFallback = generateWithFallback;
 const GEMINI_MODELS = [
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-pro',
+    'gemini-flash-latest',
+    'gemini-flash-lite-latest',
+    'gemini-2.5-flash',
+    'gemini-3.5-flash',
 ];
 function withTimeout(promise, ms) {
     return Promise.race([
@@ -19,7 +19,7 @@ function withTimeout(promise, ms) {
  */
 async function generateWithFallback(genAI, prompt, options) {
     let lastError = null;
-    const timeoutMs = options?.timeoutMs || 60000;
+    const timeoutMs = options?.timeoutMs || 25000;
     for (const modelName of GEMINI_MODELS) {
         try {
             const model = genAI.getGenerativeModel({

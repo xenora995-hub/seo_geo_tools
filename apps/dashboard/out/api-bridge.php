@@ -71,13 +71,16 @@ function safe_wake_backend() {
     return false;
 }
 
-// Helper cURL yang aman dari batasan open_basedir
-function forward_request($url, $method, $headers, $body, $timeout = 120) {
+// Helper cURL yang aman dari batasan open_basedir dan mendukung Unix Domain Socket
+function forward_request($url, $method, $headers, $body, $unix_socket = null, $timeout = 120) {
     if (!function_exists('curl_init')) {
         return ['resp' => null, 'code' => 500, 'ct' => 'application/json', 'err' => 1, 'errmsg' => 'PHP cURL extension not available'];
     }
 
     $ch = curl_init($url);
+    if ($unix_socket && defined('CURLOPT_UNIX_SOCKET_PATH') && file_exists($unix_socket)) {
+        curl_setopt($ch, CURLOPT_UNIX_SOCKET_PATH, $unix_socket);
+    }
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     // Jangan gunakan CURLOPT_FOLLOWLOCATION karena dilarang jika open_basedir aktif di Hostinger
@@ -126,17 +129,29 @@ if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
     $body = file_get_contents('php://input');
 }
 
-// 1. Eksekusi request pertama ke Express port 4000
-$res = forward_request($target_url, $method, $headers, $body);
+// Persiapan target endpoint (utamakan Unix Domain Socket di Hostinger Linux)
+$home = get_server_home();
+$socket_path = "{$home}/seo-geo-tools/apps/api/api.sock";
+$use_socket = defined('CURLOPT_UNIX_SOCKET_PATH') && file_exists($socket_path);
 
-// 2. Jika gagal koneksi (port 4000 belum menyala), coba bangunkan backend jika diizinkan server
+$target_url = $use_socket ? ("http://localhost" . $request_uri) : ("http://127.0.0.1:{$node_port}" . $request_uri);
+$unix_sock = $use_socket ? $socket_path : null;
+
+// 1. Eksekusi request pertama ke Express
+$res = forward_request($target_url, $method, $headers, $body, $unix_sock);
+
+// 2. Jika gagal koneksi (belum menyala), coba bangunkan backend jika diizinkan server
 $wakeAttempted = false;
 if ($res['err']) {
     $wakeAttempted = safe_wake_backend();
     if ($wakeAttempted) {
         for ($i = 0; $i < 3; $i++) {
             sleep(1);
-            $res = forward_request($target_url, $method, $headers, $body);
+            if (file_exists($socket_path)) {
+                $unix_sock = $socket_path;
+                $target_url = "http://localhost" . $request_uri;
+            }
+            $res = forward_request($target_url, $method, $headers, $body, $unix_sock);
             if (!$res['err']) break;
         }
     }
@@ -148,8 +163,8 @@ if ($res['err']) {
     header('Content-Type: application/json');
     echo json_encode([
         'success' => false,
-        'message' => 'Backend API service (port 4000) sedang offline. Pastikan service seogeo-api berjalan via PM2 di server.',
-        'detail' => $res['errmsg'] ?: 'Connection refused to 127.0.0.1:4000',
+        'message' => 'Backend API service sedang offline. Pastikan service seogeo-api berjalan via PM2 di server.',
+        'detail' => $res['errmsg'] ?: 'Connection failed to backend API',
         'wake_attempted' => $wakeAttempted
     ]);
 } else {
@@ -159,3 +174,4 @@ if ($res['err']) {
     }
     echo $res['resp'];
 }
+
