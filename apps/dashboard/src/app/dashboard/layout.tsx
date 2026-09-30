@@ -9,6 +9,7 @@ const navItems = [
   { href: '/dashboard/generate', label: 'Buat Artikel', icon: '✨' },
   { href: '/dashboard/schedules', label: 'Jadwal Otomatis', icon: '🕐' },
   { href: '/dashboard/reports', label: 'Laporan SEO', icon: '📊' },
+  { href: '/dashboard/ai-visibility', label: 'Visibilitas AI & ChatGPT', icon: '🤖' },
   { href: '/dashboard/keyword-research', label: 'Riset Kata Kunci', icon: '🔍' },
   { href: '/dashboard/rank-tracker', label: 'Pelacak Peringkat', icon: '📈' },
   { href: '/dashboard/client-reports', label: 'Laporan Klien', icon: '💌' },

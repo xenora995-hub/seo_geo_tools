@@ -33,6 +33,9 @@ model Tenant {
   localListings    LocalListingProfile[]
   seoDocuments     SeoWritingDocument[]
   claimedNiches    ClaimedNiche[]
+  branches         BranchProfile[]
+  aiVisibilityRuns AiVisibilityTestRun[]
+  auditFindings    AuditFindingItem[]
 }
 
 model User {
@@ -239,4 +242,68 @@ model GeoBacklinkTask {
   status       String   @default("PENDING") // PENDING or DONE
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model BranchProfile {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchName      String   // e.g. "iSmart Canggu", "Bale Bali", "iSmart Teuku Umar"
+  branchCode      String   // e.g. "ISMART_CANGGU", "BALE_BALI", "ISMART_TEUKU_UMAR"
+  relationship    String   // "Branch of Bali Phone Repair"
+  address         String
+  city            String   @default("Bali")
+  areaServed      String[] // ["Canggu", "Berawa", "Pererenan"]
+  phone           String
+  openingHours    String   // "Mo-Sa 09:00-21:00, Su 09:00-18:00"
+  googleMapsUrl   String?
+  pageUrl         String?
+  isWalkIn        Boolean  @default(true)
+  hasVillaService Boolean  @default(true)
+  hasPickup       Boolean  @default(true)
+  servicesOffered String[]
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, branchCode])
+}
+
+model AiVisibilityTestRun {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  query              String   // Natural language user question
+  sourceType         String   // "MANUAL_CHATGPT_APP" | "OPENAI_WEB_SEARCH" | "GEMINI_SEARCH_GROUNDING" | "LEGACY_UNVERIFIED"
+  model              String   // e.g. "ChatGPT App (GPT-4o)", "gpt-4o-search-preview"
+  status             String   // "not_checked" | "mentioned" | "cited" | "not_found_in_run" | "error"
+  brandMentioned     Boolean  @default(false)
+  domainCited        Boolean  @default(false)
+  domainInSources    Boolean  @default(false)
+  citationUrls       String[]
+  responseText       String   @db.Text
+  evidenceNotes      String?  @db.Text
+  searchSources      Json?
+  errorMessage       String?  @db.Text
+  isLegacySimulation Boolean  @default(false)
+  testedAt           DateTime @default(now())
+  createdAt          DateTime @default(now())
+}
+
+model AuditFindingItem {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  targetUrl      String
+  category       String    // "BRANCH_IDENTITY" | "CONTENT_GAP" | "ROBOTS_INDEXABILITY" | "SCHEMA_DATA" | "CLAIM_INTEGRITY"
+  priority       String    // "HIGH" | "MEDIUM" | "LOW"
+  issue          String
+  evidence       String    @db.Text
+  recommendation String    @db.Text
+  proposedPatch  String?   @db.Text
+  canAutoFix     Boolean   @default(false)
+  status         String    @default("OPEN") // "OPEN" | "REVIEWED" | "PATCH_READY" | "PUBLISHED" | "VERIFIED"
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }

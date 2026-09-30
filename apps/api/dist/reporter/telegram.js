@@ -122,7 +122,7 @@ async function sendWeeklyReport(tenantId) {
         const { checkAiVisibility } = await Promise.resolve().then(() => __importStar(require('../crawler/chatgpt')));
         const aiVis = await checkAiVisibility(tenantId);
         if (aiVis.length > 0) {
-            aiInfo = aiVis.map(v => `• Keyword "${v.keyword}": Muncul di ChatGPT (${v.appearsInChatGpt ? 'Ya ✅' : 'Belum ❌'}) | Perplexity (${v.appearsInPerplexity ? 'Ya ✅' : 'Belum ❌'})`).join('\n');
+            aiInfo = aiVis.map((v) => `• Keyword "${v.keyword}": Muncul di ChatGPT (${v.appearsInChatGpt ? 'Ya ✅' : 'Belum ❌'}) | Perplexity (${v.appearsInPerplexity ? 'Ya ✅' : 'Belum ❌'})`).join('\n');
         }
         else {
             aiInfo = '• ChatGPT: _Aktifkan keyword di pengaturan_';

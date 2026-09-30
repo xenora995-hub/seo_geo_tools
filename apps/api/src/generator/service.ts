@@ -4,7 +4,7 @@ import { generateContentGapKeywords } from './content-gap-ai'
 import { publishToWordPress } from '../publisher/wordpress'
 import { publishToLaravel } from '../publisher/laravel'
 import { publishToBlogger } from '../publisher/blogger'
-import { pingGoogleIndexing } from '../publisher/indexer'
+import { pingGoogleIndexing, pingIndexNow, pingAllEngines } from '../publisher/indexer'
 import { generateWithFallback } from '../lib/gemini'
 
 interface GenerateOptions {
@@ -87,7 +87,7 @@ export async function generateAndPublish(options: GenerateOptions) {
   // Injeksi 3 Schema JSON-LD (Article, LocalBusiness, dan FAQ)
   const timezone = setting.timezone || 'Asia/Makassar'
   const actualPublishDate = publishDate ? new Date(publishDate) : new Date()
-  const authorName = getDynamicAuthor(`${topicToWrite || ''} ${articleData.title}`)
+  const authorName = getDynamicAuthor(`${topicToWrite || ''} ${articleData.title}`, tenant.name)
   const articleUrl = getArticleUrl(articleData.title, tenant.cmsUrl)
 
   const articleSchema = generateArticleSchema(
@@ -97,9 +97,10 @@ export async function generateAndPublish(options: GenerateOptions) {
     actualPublishDate,
     authorName,
     articleUrl,
-    timezone
+    timezone,
+    tenant
   )
-  const localBusinessSchema = generateLocalBusinessSchema()
+  const localBusinessSchema = generateLocalBusinessSchema(tenant)
   const faqSchema = generateFaqSchema(articleData.content)
   const cleanedContent = formatContentForCms(articleData.content)
   const finalContent = `${articleSchema}${localBusinessSchema}${cleanedContent}${faqSchema ? `\n${faqSchema}` : ''}`
@@ -163,13 +164,17 @@ export async function generateAndPublish(options: GenerateOptions) {
 
       console.log(`[GENERATOR] ✅ Artikel berhasil dipublikasi ke CMS: ${cmsPostUrl}`)
 
-      // 6. Flash Indexing API (Opsional)
-      if (setting.enableAutoIndex && cmsPostUrl && setting.googleServiceAccountJson) {
+      // 6. Flash Indexing API (IndexNow / Bing / ChatGPT Search + Google)
+      if (cmsPostUrl) {
         try {
-          console.log(`[GENERATOR] Menembak URL ke Google Indexing API...`)
-          await pingGoogleIndexing(cmsPostUrl, setting.googleServiceAccountJson)
+          console.log(`[GENERATOR] Menembak URL ke IndexNow (Bing & ChatGPT Search)...`)
+          await pingAllEngines({
+            urls: [cmsPostUrl],
+            host: tenant.domain,
+            googleServiceAccountJson: setting.enableAutoIndex ? setting.googleServiceAccountJson : null
+          })
         } catch (idxErr) {
-          console.error(`[GENERATOR] Gagal Indexing API. Tapi artikel sudah tayang.`)
+          console.warn(`[GENERATOR] Notice Indexing API:`, idxErr)
         }
       }
 
@@ -201,8 +206,9 @@ export async function generateAndPublish(options: GenerateOptions) {
   }
 }
 
-export function getDynamicAuthor(topicOrTitle: string): string {
+export function getDynamicAuthor(topicOrTitle: string, tenantName?: string): string {
   const text = (topicOrTitle || '').toLowerCase()
+  const brand = tenantName || 'Bali Phone Repair'
 
   // 1. Water Damage
   if (
@@ -214,7 +220,7 @@ export function getDynamicAuthor(topicOrTitle: string): string {
     text.includes('kena air') ||
     text.includes('water recovery')
   ) {
-    return 'Device Recovery Specialist, Bali Phone Repair Team'
+    return `Device Recovery Specialist, ${brand} Team`
   }
 
   // 2. iPhone / iPad
@@ -224,7 +230,7 @@ export function getDynamicAuthor(topicOrTitle: string): string {
     text.includes('apple watch') ||
     text.includes('ios')
   ) {
-    return 'iPhone Repair Specialist, Bali Phone Repair Team'
+    return `iPhone & Apple Specialist, ${brand} Team`
   }
 
   // 3. MacBook / Laptop
@@ -233,9 +239,11 @@ export function getDynamicAuthor(topicOrTitle: string): string {
     text.includes('laptop') ||
     text.includes('mac mini') ||
     text.includes('imac') ||
-    text.includes('notebook')
+    text.includes('notebook') ||
+    text.includes('micro-soldering') ||
+    text.includes('logic board')
   ) {
-    return 'MacBook Technician, Bali Phone Repair Team'
+    return `MacBook & Hardware Technician, ${brand} Team`
   }
 
   // 4. Android
@@ -250,11 +258,11 @@ export function getDynamicAuthor(topicOrTitle: string): string {
     text.includes('realme') ||
     text.includes('huawei')
   ) {
-    return 'Android Repair Expert, Bali Phone Repair Team'
+    return `Android Repair Expert, ${brand} Team`
   }
 
   // 5. Default
-  return 'Bali Phone Repair Team'
+  return `${brand} Team`
 }
 
 export function getArticleUrl(title: string, tenantCmsUrl?: string, cmsPostUrl?: string | null): string {
@@ -274,7 +282,8 @@ export function generateArticleSchema(
   publishDate: Date,
   authorName: string,
   articleUrl: string,
-  timezone: string = 'Asia/Makassar'
+  timezone: string = 'Asia/Makassar',
+  tenant?: any
 ): string {
   let dateStr = ''
   try {
@@ -290,6 +299,15 @@ export function generateArticleSchema(
 
   const tzOffset = timezone.includes('Jakarta') ? '+07:00' : '+08:00'
   const isoDate = `${dateStr}T08:00:00${tzOffset}`
+  const tenantName = tenant?.name || 'Bali Phone Repair'
+  const cleanDomain = tenant?.domain ? tenant.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : 'baliphonerepair.com'
+  
+  let logoUrl = `https://${cleanDomain}/logo.png`
+  if (cleanDomain.includes('baliphonerepair')) {
+    logoUrl = 'https://baliphonerepair.com/assets/bali-phone-repair/logo-optimized.jpg'
+  } else if (cleanDomain.includes('prosbali')) {
+    logoUrl = 'https://prosbali.com/assets/images/logo.png'
+  }
 
   const schema = {
     "@context": "https://schema.org",
@@ -305,15 +323,15 @@ export function generateArticleSchema(
       "name": authorName,
       "worksFor": {
         "@type": "Organization",
-        "name": "Bali Phone Repair"
+        "name": tenantName
       }
     },
     "publisher": {
       "@type": "Organization",
-      "name": "Bali Phone Repair",
+      "name": tenantName,
       "logo": {
         "@type": "ImageObject",
-        "url": "https://baliphonerepair.com/assets/bali-phone-repair/logo-optimized.jpg"
+        "url": logoUrl
       }
     }
   }
@@ -323,12 +341,12 @@ export function generateArticleSchema(
 export function generateFaqSchema(contentHtml: string): string {
   const faqItems: Array<{ question: string; answer: string }> = []
 
-  // Deteksi H3 yang diakhiri tanda tanya (?) sebagai pertanyaan, dan paragraf setelahnya sebagai jawaban
-  const h3Regex = /<h3[^>]*>([\s\S]*?)<\/h3>\s*<p[^>]*>([\s\S]*?)<\/p>/gi
+  // Deteksi H2 atau H3 yang diakhiri tanda tanya (?) sebagai pertanyaan, dan paragraf setelahnya sebagai jawaban
+  const headingRegex = /<(h[23])[^>]*>([\s\S]*?)<\/\1>\s*<p[^>]*>([\s\S]*?)<\/p>/gi
   let match: RegExpExecArray | null
-  while ((match = h3Regex.exec(contentHtml)) !== null) {
-    const rawQuestion = match[1].replace(/<[^>]+>/g, '').trim()
-    const rawAnswer = match[2].replace(/<[^>]+>/g, '').trim()
+  while ((match = headingRegex.exec(contentHtml)) !== null) {
+    const rawQuestion = match[2].replace(/<[^>]+>/g, '').trim()
+    const rawAnswer = match[3].replace(/<[^>]+>/g, '').trim()
     if (rawQuestion && rawQuestion.endsWith('?') && rawAnswer) {
       faqItems.push({ question: rawQuestion, answer: rawAnswer })
     }
@@ -352,41 +370,101 @@ export function generateFaqSchema(contentHtml: string): string {
   return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`
 }
 
-export function generateLocalBusinessSchema(): string {
+export function generateLocalBusinessSchema(tenant?: any): string {
+  const cleanDomain = tenant?.domain ? tenant.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase() : 'baliphonerepair.com'
+
+  if (cleanDomain.includes('prosbali')) {
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "PROS Device Care",
+      "alternateName": "PROS Device Care Bali",
+      "url": "https://prosbali.com",
+      "telephone": "+6281238914619",
+      "email": "info@prosbali.com",
+      "image": "https://prosbali.com/assets/images/logo.png",
+      "priceRange": "$$",
+      "description": "Professional MacBook, laptop, and smartphone repair laboratory in Canggu and Pererenan Bali. Specialists in logic board micro-soldering, water damage ultrasonic cleaning, screen replacement, and remote worker data recovery with secure villa courier pickup.",
+      "areaServed": [
+        "Pererenan",
+        "Canggu",
+        "Berawa",
+        "Seminyak",
+        "Kerobokan",
+        "Ubud",
+        "Denpasar",
+        "Badung",
+        "Bali"
+      ],
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Jl. Dalem Lingsir",
+        "addressLocality": "Pererenan, Canggu",
+        "addressRegion": "Bali",
+        "postalCode": "80351",
+        "addressCountry": "ID"
+      },
+      "openingHours": [
+        "Mo-Sa 09:00-19:00"
+      ]
+    }
+    return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`
+  }
+
+  if (cleanDomain.includes('baliphonerepair')) {
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "Bali Phone Repair",
+      "url": "https://baliphonerepair.com",
+      "telephone": "+6281929164999",
+      "email": "hello@baliphonerepair.com",
+      "image": "https://baliphonerepair.com/assets/bali-phone-repair/logo-optimized.jpg",
+      "priceRange": "$$",
+      "description": "Professional smartphone, tablet, and laptop repair services in Bali including iPhone, MacBook, and Android device recovery with certified technicians and on-site villa or hotel pickup.",
+      "areaServed": [
+        "Canggu",
+        "Seminyak",
+        "Kuta",
+        "Uluwatu",
+        "Denpasar",
+        "Sanur",
+        "Ubud",
+        "Jimbaran",
+        "Nusa Dua"
+      ],
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Jl. Pulau Misol No.106, Dauh Puri Kauh",
+        "addressLocality": "Denpasar",
+        "addressRegion": "Bali",
+        "postalCode": "80113",
+        "addressCountry": "ID"
+      },
+      "openingHours": [
+        "Mo-Sa 09:00-21:00",
+        "Su 09:00-18:00"
+      ]
+    }
+    return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`
+  }
+
+  // Fallback Dynamic Schema for any other tenant
+  const tenantName = tenant?.name || 'Local Business Service'
+  const fullUrl = tenant?.cmsUrl || `https://${cleanDomain}`
   const schema = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "name": "Bali Phone Repair",
-    "url": "https://baliphonerepair.com",
-    "telephone": "+6281929164999",
-    "email": "hello@baliphonerepair.com",
-    "image": "https://baliphonerepair.com/assets/bali-phone-repair/logo-optimized.jpg",
-    "description": "Professional smartphone, tablet, and laptop repair services in Bali including iPhone, MacBook, and Android device recovery with certified technicians and genuine warranty.",
-    "areaServed": [
-      "Canggu",
-      "Seminyak",
-      "Kuta",
-      "Uluwatu",
-      "Denpasar",
-      "Sanur",
-      "Ubud",
-      "Jimbaran",
-      "Nusa Dua"
-    ],
+    "name": tenantName,
+    "url": fullUrl,
+    "description": tenant?.setting?.businessNiche || `${tenantName} premium services in Bali.`,
+    "areaServed": ["Bali", "Denpasar", "Badung"],
     "address": {
       "@type": "PostalAddress",
-      "streetAddress": "Jl. Pulau Misol No.106, Dauh Puri Kauh",
-      "addressLocality": "Denpasar",
       "addressRegion": "Bali",
-      "postalCode": "80113",
       "addressCountry": "ID"
-    },
-    "openingHours": [
-      "Mo-Sa 09:00-21:00",
-      "Su 09:00-18:00"
-    ]
+    }
   }
-
   return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`
 }
 
@@ -706,7 +784,7 @@ export async function publishExistingArticle(articleId: string, customPublishDat
 
   const timezone = tenant.setting?.timezone || 'Asia/Makassar'
   const actualPublishDate = customPublishDate ? new Date(customPublishDate) : new Date()
-  const authorName = getDynamicAuthor(article.title)
+  const authorName = getDynamicAuthor(article.title, tenant.name)
   const articleUrl = getArticleUrl(article.title, tenant.cmsUrl, article.cmsPostUrl)
 
   // Bersihkan schema JSON-LD lama jika ada sebelum membuat ulang 3 schema baru
@@ -720,9 +798,10 @@ export async function publishExistingArticle(articleId: string, customPublishDat
     actualPublishDate,
     authorName,
     articleUrl,
-    timezone
+    timezone,
+    tenant
   )
-  const newLocalBusinessSchema = generateLocalBusinessSchema()
+  const newLocalBusinessSchema = generateLocalBusinessSchema(tenant)
   const newFaqSchema = generateFaqSchema(cleanContent)
   const updatedContent = `${newArticleSchema}${newLocalBusinessSchema}${cleanContent}${newFaqSchema ? `\n${newFaqSchema}` : ''}`
 
@@ -786,12 +865,16 @@ export async function publishExistingArticle(articleId: string, customPublishDat
     }
   })
 
-  if (tenant.setting?.enableAutoIndex && cmsPostUrl && tenant.setting?.googleServiceAccountJson) {
+  if (cmsPostUrl) {
     try {
-      console.log(`[GENERATOR] Menembak URL ke Google Indexing API...`)
-      await pingGoogleIndexing(cmsPostUrl, tenant.setting.googleServiceAccountJson)
+      console.log(`[GENERATOR] Menembak URL ke IndexNow (Bing & ChatGPT Search)...`)
+      await pingAllEngines({
+        urls: [cmsPostUrl],
+        host: tenant.domain,
+        googleServiceAccountJson: tenant.setting?.enableAutoIndex ? tenant.setting?.googleServiceAccountJson : null
+      })
     } catch (idxErr) {
-      console.error(`[GENERATOR] Gagal Indexing API:`, idxErr)
+      console.warn(`[GENERATOR] Indexing ping notice:`, idxErr)
     }
   }
 

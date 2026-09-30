@@ -99,7 +99,7 @@ export async function sendWeeklyReport(tenantId: string) {
     const { checkAiVisibility } = await import('../crawler/chatgpt')
     const aiVis = await checkAiVisibility(tenantId)
     if (aiVis.length > 0) {
-      aiInfo = aiVis.map(v =>
+      aiInfo = aiVis.map((v: any) =>
         `• Keyword "${v.keyword}": Muncul di ChatGPT (${v.appearsInChatGpt ? 'Ya ✅' : 'Belum ❌'}) | Perplexity (${v.appearsInPerplexity ? 'Ya ✅' : 'Belum ❌'})`
       ).join('\n')
     } else {

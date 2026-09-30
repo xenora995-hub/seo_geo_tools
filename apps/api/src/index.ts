@@ -19,6 +19,8 @@ import { localListingRouter } from './routes/local-listing'
 import { seoWritingRouter } from './routes/seo-writing'
 import { nicheFinderRouter } from './routes/niche-finder'
 import { scraperRouter } from './routes/scraper'
+import { aiVisibilityRouter } from './routes/ai-visibility'
+import { auditEngineRouter } from './routes/audit-engine'
 import { initScheduler } from './scheduler/cron'
 import { initTelegramBots } from './telegram/bot'
 
@@ -68,6 +70,8 @@ app.use('/api/local-listing', localListingRouter)
 app.use('/api/seo-writing', seoWritingRouter)
 app.use('/api/niche-finder', nicheFinderRouter)
 app.use('/api/scraper', scraperRouter)
+app.use('/api/ai-visibility', aiVisibilityRouter)
+app.use('/api/audit-engine', auditEngineRouter)
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

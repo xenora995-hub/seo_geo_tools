@@ -24,6 +24,8 @@ const local_listing_1 = require("./routes/local-listing");
 const seo_writing_1 = require("./routes/seo-writing");
 const niche_finder_1 = require("./routes/niche-finder");
 const scraper_1 = require("./routes/scraper");
+const ai_visibility_1 = require("./routes/ai-visibility");
+const audit_engine_1 = require("./routes/audit-engine");
 const cron_1 = require("./scheduler/cron");
 const bot_1 = require("./telegram/bot");
 const app = (0, express_1.default)();
@@ -68,6 +70,8 @@ app.use('/api/local-listing', local_listing_1.localListingRouter);
 app.use('/api/seo-writing', seo_writing_1.seoWritingRouter);
 app.use('/api/niche-finder', niche_finder_1.nicheFinderRouter);
 app.use('/api/scraper', scraper_1.scraperRouter);
+app.use('/api/ai-visibility', ai_visibility_1.aiVisibilityRouter);
+app.use('/api/audit-engine', audit_engine_1.auditEngineRouter);
 // Error handler
 app.use((err, _req, res, _next) => {
     console.error('[ERROR]', err);

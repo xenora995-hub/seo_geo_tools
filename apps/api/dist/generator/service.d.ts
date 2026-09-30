@@ -45,11 +45,11 @@ export declare function generateAndPublish(options: GenerateOptions): Promise<{
     };
     message: string;
 }>;
-export declare function getDynamicAuthor(topicOrTitle: string): string;
+export declare function getDynamicAuthor(topicOrTitle: string, tenantName?: string): string;
 export declare function getArticleUrl(title: string, tenantCmsUrl?: string, cmsPostUrl?: string | null): string;
-export declare function generateArticleSchema(title: string, excerpt: string, keywords: string[], publishDate: Date, authorName: string, articleUrl: string, timezone?: string): string;
+export declare function generateArticleSchema(title: string, excerpt: string, keywords: string[], publishDate: Date, authorName: string, articleUrl: string, timezone?: string, tenant?: any): string;
 export declare function generateFaqSchema(contentHtml: string): string;
-export declare function generateLocalBusinessSchema(): string;
+export declare function generateLocalBusinessSchema(tenant?: any): string;
 export declare function publishExistingArticle(articleId: string, customPublishDate?: string | Date | null): Promise<{
     id: string;
     createdAt: Date;
