@@ -46,7 +46,7 @@ export async function generateAndPublish(options: GenerateOptions) {
           where: { tenantId },
           select: { title: true },
           orderBy: { createdAt: 'desc' },
-          take: 30
+          take: 250
         })
         const pastTitles = existingArticles.map(a => a.title.toLowerCase())
 
@@ -68,11 +68,21 @@ export async function generateAndPublish(options: GenerateOptions) {
     }
   }
 
-  // Fallback jika topik belum terbentuk
+  // Fallback jika topik belum terbentuk: utamakan keyword yang belum pernah ditulis
   if (!topicToWrite) {
     const isEn = tenant.language === 'en'
-    const fallbackKw = (setting.targetKeywords && setting.targetKeywords.length > 0)
-      ? setting.targetKeywords[Math.floor(Math.random() * setting.targetKeywords.length)]
+    const recentArticles = await prisma.article.findMany({
+      where: { tenantId },
+      select: { title: true },
+      take: 200
+    })
+    const existingTitles = recentArticles.map(a => a.title.toLowerCase())
+
+    const unwrittenKws = (setting.targetKeywords || []).filter(kw => !existingTitles.some(t => t.includes(kw.toLowerCase())))
+    const availableKws = unwrittenKws.length > 0 ? unwrittenKws : (setting.targetKeywords || [])
+
+    const fallbackKw = availableKws.length > 0
+      ? availableKws[Math.floor(Math.random() * availableKws.length)]
       : (setting.businessNiche || 'electronics repair')
 
     topicToWrite = isEn
@@ -444,6 +454,41 @@ export function generateLocalBusinessSchema(tenant?: any): string {
       "openingHours": [
         "Mo-Sa 09:00-21:00",
         "Su 09:00-18:00"
+      ]
+    }
+    return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`
+  }
+
+  if (cleanDomain.includes('yourbaliassistant') || cleanDomain.includes('yourbaliasistant')) {
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": ["TravelAgency", "LodgingBusiness"],
+      "name": "Your Bali Assistant",
+      "alternateName": "Your Bali Assistant Luxury Concierge",
+      "url": "https://yourbaliassistant.com",
+      "telephone": "+6287882831078",
+      "email": "contact@yourbaliassistant.com",
+      "image": "https://yourbaliassistant.com/images/hero.jpg",
+      "priceRange": "$$$",
+      "description": "Curated luxury villa rentals, private island tours, boat charters, VIP airport fast track, and bespoke travel concierge services across Bali.",
+      "areaServed": [
+        "Seminyak",
+        "Canggu",
+        "Uluwatu",
+        "Ubud",
+        "Sanur",
+        "Pererenan",
+        "Nusa Penida",
+        "Bali"
+      ],
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Badung",
+        "addressRegion": "Bali",
+        "addressCountry": "ID"
+      },
+      "openingHours": [
+        "Mo-Su 08:00-22:00"
       ]
     }
     return `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>\n`
